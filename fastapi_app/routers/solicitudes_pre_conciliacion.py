@@ -183,9 +183,29 @@ def get_solicitudes_by_propuesta_and_usuario(
                 }
             })
 
+    # Identificar las solicitudes que no están en ninguna de las dos categorías anteriores
+    solicitudes_procesadas_ids = set(s["id_solicitud"] for s in result_oportunidad) | set(s["id_solicitud"] for s in result_programa)
+    solicitudes_generales = []
+    
+    for solicitud in solicitudes:
+        if solicitud.id_solicitud not in solicitudes_procesadas_ids:
+            solicitudes_generales.append({
+                "id_solicitud": solicitud.id_solicitud,
+                "id_propuesta": solicitud.id_propuesta,
+                "id_usuario_generador": solicitud.id_usuario_generador,
+                "id_usuario_receptor": solicitud.id_usuario_receptor,
+                "aceptado_por_responsable": solicitud.aceptado_por_responsable,
+                "tipo_solicitud": solicitud.tipo_solicitud,
+                "valor_solicitud": solicitud.valor_solicitud,
+                "comentario": solicitud.comentario,
+                "creado_en": solicitud.creado_en,
+                "abierta": solicitud.abierta
+            })
+
     return {
         "solicitudesPropuestaOportunidad": result_oportunidad,
-        "solicitudesPropuestaPrograma": result_programa
+        "solicitudesPropuestaPrograma": result_programa,
+        "solicitudesGenerales": solicitudes_generales
     }
 @router.patch("/solicitud/{id_solicitud}")
 def update_solicitud_by_id(

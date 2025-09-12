@@ -1,7 +1,5 @@
 from fastapi import APIRouter
 
-# (Aquí va el resto del código original que estaba antes del endpoint, sin cambios)
-# Función para poblar la tabla permiso y rol_permiso desde la MATRIZ_PERMISOS
 def poblar_permisos_y_rol_permiso(matriz_permisos):
     """
     Pobla la tabla permiso y la tabla rol_permiso usando la matriz recibida como argumento.
@@ -61,6 +59,7 @@ def sync_db_schema(drop_removed_columns=True):
     Args:
         drop_removed_columns (bool): Si es True, elimina columnas que ya no están en los modelos
     """
+    print("Init")
     inspector = inspect(engine)
     metadata = Base.metadata
     
@@ -279,6 +278,7 @@ from .routers.solicitudes_daf import programa_router as daf_programa_router
 
 # Importamos los routers
 from .routers import rol, csv_upload, roles_usuarios_carteras, propuesta_programas
+from .routers import solicitudes_jp, solicitudes_alumnos
 
 # Configuración de la aplicación FastAPI con metadatos para mejorar Swagger
 app = FastAPI(
@@ -314,8 +314,12 @@ app.include_router(csv_upload.router, tags=["CSV Upload"])
 app.include_router(roles_usuarios_carteras.router)
 app.include_router(propuesta_programas.router, tags=["Propuesta"])
 app.include_router(solicitudes_daf.router)
+app.include_router(solicitudes_jp.router)
 # Include DAF routers 
 app.include_router(daf_programa_router)
+# Include Solicitudes Alumnos router
+app.include_router(solicitudes_alumnos.router)
+
 # Include Solicitudes Pre-Conciliacion router
 from .routers.solicitudes_pre_conciliacion import router as solicitudes_pre_conciliacion_router
 app.include_router(solicitudes_pre_conciliacion_router)

@@ -17,3 +17,4 @@ class Programa(Base):
     cartera = Column(String(100), nullable=True)
     id_propuesta = Column(Integer, nullable=True)
     precio_lista = Column(Float, nullable=False)
+    subdireccion = Column(String(100), nullable=True)   

@@ -4,6 +4,7 @@ from ..models.propuesta_programa import PropuestaPrograma
 from ..models.programa import Programa
 from ..models.propuesta_oportunidad import PropuestaOportunidad
 from ..models.oportunidad import Oportunidad
+from ..models.usuario import Usuario
 from ..database import get_db
 from datetime import date
 from dateutil.relativedelta import relativedelta
@@ -79,6 +80,11 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
                 "becado": oportunidad_real.becado if oportunidad_real else None,
                 "conciliado": oportunidad_real.conciliado if oportunidad_real else None
             })
+        # Obtener información del JP
+        jefe_producto = None
+        if programa.id_jefe_producto:
+            jefe_producto = db.query(Usuario).filter(Usuario.id_usuario == programa.id_jefe_producto).first()
+
         programas.append({
             "id": programa.id_programa,  # Añadimos este campo para consistencia con el frontend
             "id_programa": programa.id_programa,
@@ -94,6 +100,8 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
             "cartera": programa.cartera,
             "precio_lista": programa.precio_lista,
             "id_jefe_producto": programa.id_jefe_producto,
+            "nombre_jefe_producto": jefe_producto.nombres    if jefe_producto else None,
+            "subdireccion": programa.subdireccion,
             "id_propuesta_programa": pp.id_propuesta_programa,
             "oportunidades": oportunidades_list
         })
