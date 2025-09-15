@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, ForeignKey, DECIMAL
+from sqlalchemy import Column, Integer, ForeignKey, DECIMAL, String
 from ..database import Base
 
 class PropuestaPrograma(Base):

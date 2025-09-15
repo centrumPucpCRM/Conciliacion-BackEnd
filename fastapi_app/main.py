@@ -333,6 +333,7 @@ async def get_matriz_permisos():
     from .models.rol_permiso import Rol, Permiso, RolPermiso
     from .database import SessionLocal
     db = SessionLocal()
+    print("Obteniendo matriz de permisos...")
     try:
         # Obtener todos los roles y permisos
         roles = db.query(Rol).all()

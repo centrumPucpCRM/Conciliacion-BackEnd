@@ -1,3 +1,5 @@
+
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -35,3 +37,26 @@ def get_solicitud(solicitud_id: int, db: Session = Depends(get_db)):
 
 
 
+@router.get("/aprobacion_jp/usuario/{id_usuario_generador}", response_model=List[Solicitud])
+def get_aprobacion_jp_by_usuario_generador(id_usuario_generador: int, db: Session = Depends(get_db)):
+    """
+    Listar todas las solicitudes de tipo APROBACION_JP donde el usuario es el generador.
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        SolicitudModel.tipo_solicitud == "APROBACION_JP",
+        SolicitudModel.id_usuario_generador == id_usuario_generador
+    ).all()
+    return solicitudes
+@router.patch("/aprobacion_jp/usuario/{id_usuario_generador}/cerrar", response_model=List[Solicitud])
+def cerrar_aprobacion_jp_by_usuario_generador(id_usuario_generador: int, db: Session = Depends(get_db)):
+    """
+    Cierra (abierta=0) todas las solicitudes de tipo APROBACION_JP donde el usuario es el generador.
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        SolicitudModel.tipo_solicitud == "APROBACION_JP",
+        SolicitudModel.id_usuario_generador == id_usuario_generador
+    ).all()
+    for solicitud in solicitudes:
+        solicitud.abierta = False
+    db.commit()
+    return solicitudes
