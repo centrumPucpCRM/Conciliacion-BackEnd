@@ -27,6 +27,10 @@ from .routers import rol as rol_router, csv_upload, roles_usuarios_carteras, pro
 from .routers import solicitudes_jp, solicitudes_alumnos
 from .routers.solicitudes_daf import programa_router as daf_programa_router
 
+# Declaración explícita para uso global en main.py
+from .routers.solicitudes_pre_conciliacion import router as solicitudes_pre_conciliacion_router
+
+
 # --------------------------------------------------------
 # Logging básico
 # --------------------------------------------------------
@@ -390,8 +394,9 @@ app.include_router(roles_usuarios_carteras.router)
 app.include_router(propuesta_programas.router, tags=["Propuesta"])
 app.include_router(solicitudes_daf.router)
 app.include_router(solicitudes_jp.router)
-app.include_router(daf_programa_router)            # DAF
-app.include_router(solicitudes_alumnos.router)     # Solicitudes Alumnos
+app.include_router(daf_programa_router)            
+app.include_router(solicitudes_alumnos.router)     
+app.include_router(solicitudes_pre_conciliacion_router)
 
 # --------------------------------------------------------
 # Endpoints utilitarios

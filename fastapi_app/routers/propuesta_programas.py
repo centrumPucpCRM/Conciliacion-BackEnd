@@ -8,25 +8,27 @@ from ..models.usuario import Usuario
 from ..database import get_db
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from datetime import date as date_type
 
 router = APIRouter()
 
 @router.get('/propuestas/{propuesta_id}/programas', response_model=list)
 def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db)):
+
     propuesta_programas = db.query(PropuestaPrograma).filter(
         PropuestaPrograma.id_propuesta == propuesta_id
     ).all()
     if not propuesta_programas:
         raise HTTPException(status_code=404, detail="No se encontraron programas para la propuesta")
-
     # Calcular los meses válidos (mes actual -1, -2, -3, -4)
     hoy = date.today()
     meses_validos = set()
     for n in [1,2,3,4]:
         mes = (hoy - relativedelta(months=n)).strftime('%Y-%m')
         meses_validos.add(mes)
-
+    print(meses_validos)
     # Recopilamos primero todos los programas filtrados que cumplen con los requisitos
+
     programas_filtrados = []
     for pp in propuesta_programas:
         programa = db.query(Programa).filter(Programa.id_programa == pp.id_programa).first()
@@ -35,15 +37,13 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
         # Filtrar por mes de fecha_de_inauguracion
         if programa.fecha_de_inauguracion:
             mes_programa = programa.fecha_de_inauguracion.strftime('%Y-%m')
+            print(mes_programa)
             if mes_programa not in meses_validos:
                 continue
         else:
             continue
         programas_filtrados.append((programa, pp))
     
-    # Ordenamos los programas primero por cartera y luego por fecha de inauguración (descendente)
-    # Para ordenar fechas en orden descendente, usamos el negativo del número de días desde una fecha de referencia
-    from datetime import date as date_type
     epoch = date_type(1970, 1, 1)
     
     def fecha_comparacion(programa):
@@ -52,9 +52,11 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
             return -((programa[0].fecha_de_inauguracion - epoch).days)
         return 0  # Si no hay fecha, va al final
         
+
     programas_filtrados.sort(key=lambda x: (x[0].cartera, fecha_comparacion(x)))
     
     # Construimos la respuesta final con los programas ordenados
+
     programas = []
     for programa, pp in programas_filtrados:
         # Buscar oportunidades asociadas a este propuesta_programa
@@ -78,7 +80,9 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
                 # Añadimos los campos adicionales
                 "posible_atipico": oportunidad_real.posible_atipico if oportunidad_real else None,
                 "becado": oportunidad_real.becado if oportunidad_real else None,
-                "conciliado": oportunidad_real.conciliado if oportunidad_real else None
+                "conciliado": oportunidad_real.conciliado if oportunidad_real else None,
+                "party_number": oportunidad_real.party_number if oportunidad_real else None ,
+                "conciliado": oportunidad_real.conciliado if oportunidad_real else None  
             })
         # Obtener información del JP
         jefe_producto = None
@@ -103,6 +107,7 @@ def get_programas_de_propuesta(propuesta_id: int, db: Session = Depends(get_db))
             "nombre_jefe_producto": jefe_producto.nombres    if jefe_producto else None,
             "subdireccion": programa.subdireccion,
             "id_propuesta_programa": pp.id_propuesta_programa,
-            "oportunidades": oportunidades_list
+            "oportunidades": oportunidades_list,
+            "subdireccion": programa.subdireccion
         })
     return programas

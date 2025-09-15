@@ -35,6 +35,8 @@ example_data = [
         "oportunidad.moneda": "PEN",
         "oportunidad.monto": 22500,
         "oportunidad.becado": True,
+        "oportunidad.conciliado": False,
+        "oportunidad.party_number": "PN12345",
         "oportunidad.conciliado": False
     },
     {
@@ -56,6 +58,7 @@ example_data = [
         "oportunidad.moneda": "PEN",
         "oportunidad.monto": 22500,
         "oportunidad.becado": True,
+        "oportunidad.party_number": "PN1234335",
         "oportunidad.conciliado": False
     },
     {
@@ -77,6 +80,7 @@ example_data = [
         "oportunidad.moneda": "PEN",
         "oportunidad.monto": 22500,
         "oportunidad.becado": True,
+        "oportunidad.party_number": "PN1234225",
         "oportunidad.conciliado": False
     },
     {
@@ -98,6 +102,7 @@ example_data = [
         "oportunidad.moneda": "USD",
         "oportunidad.monto": 14250,
         "oportunidad.becado": False,
+        "oportunidad.party_number": "PN1234511",
         "oportunidad.conciliado": False
 
     }

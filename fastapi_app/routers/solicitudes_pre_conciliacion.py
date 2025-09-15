@@ -1,4 +1,5 @@
 
+
 from fastapi import Body
 from ..models.propuesta_oportunidad import PropuestaOportunidad
 # Endpoint para actualizar cualquier campo de PropuestaOportunidad por id
@@ -20,6 +21,37 @@ router = APIRouter(
     tags=["solicitudes-pre-conciliacion"],
     responses={404: {"description": "No encontrado"}},
 )
+
+@router.patch("/solicitud/{id_solicitud}/accion")
+def actualizar_estado_solicitud_accion(
+    id_solicitud: int,
+    accion: str = Body(..., embed=True),  # 'ACEPTAR' o 'RECHAZAR'
+    db: Session = Depends(get_db)
+):
+    """
+    Cambia el estado de la solicitud:
+    - Si accion == 'RECHAZAR': abierta = False, valor_solicitud = 'RECHAZADO'
+    - Si accion == 'ACEPTAR': abierta = False, valor_solicitud = 'ACEPTADO'
+    """
+    solicitud = db.query(Solicitud).filter(Solicitud.id_solicitud == id_solicitud).first()
+    if not solicitud:
+        raise HTTPException(status_code=404, detail=f"Solicitud con ID {id_solicitud} no encontrada")
+    if accion == 'RECHAZAR':
+        solicitud.abierta = False
+        solicitud.valor_solicitud = 'RECHAZADO'
+    elif accion == 'ACEPTAR':
+        solicitud.abierta = False
+        solicitud.valor_solicitud = 'ACEPTADO'
+    else:
+        raise HTTPException(status_code=400, detail="Acción no válida. Use 'ACEPTAR' o 'RECHAZAR'.")
+    db.commit()
+    db.refresh(solicitud)
+    return {
+        "id_solicitud": solicitud.id_solicitud,
+        "abierta": solicitud.abierta,
+        "valor_solicitud": solicitud.valor_solicitud
+    }
+
 @router.get("/propuesta/{id_propuesta}/usuario/{id_usuario}")
 def get_solicitudes_by_propuesta_and_usuario(
     id_propuesta: int, 

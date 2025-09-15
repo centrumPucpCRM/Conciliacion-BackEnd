@@ -30,6 +30,7 @@ def create_solicitud_aprobacion_subdirector(
     Crear una solicitud de aprobación JP para subdirector
     """
     try:
+        print("Creando solicitud de aprobación JP para subdirector:", solicitud_data)
         nueva_solicitud = Solicitud(
             id_propuesta=solicitud_data.id_propuesta,
             id_usuario_generador=solicitud_data.id_usuario_generador,
@@ -58,6 +59,10 @@ def create_solicitud_aprobacion_subdirector(
         )
     except Exception as e:
         db.rollback()
+        import traceback
+        print("ERROR creando solicitud de aprobación JP para subdirector:")
+        print(str(e))
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creando solicitud de aprobación JP para subdirector: {str(e)}"
