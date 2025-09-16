@@ -265,6 +265,10 @@ def crear_usuarios_predeterminados():
     finally:
         db.close()
 
+# Ejecutar las funciones para crear datos iniciales
+crear_roles_predeterminados()
+crear_usuarios_predeterminados()
+
 # (Aquí va el resto del código original que estaba después de crear_usuarios_predeterminados(), sin cambios)
 
 from fastapi import FastAPI
