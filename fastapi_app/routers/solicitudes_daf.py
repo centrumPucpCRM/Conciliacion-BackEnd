@@ -7,16 +7,98 @@ from ..models.solicitud import Solicitud, TIPO_SOLICITUD_VALORES, VALOR_SOLICITU
 from ..models.solicitud_propuesta_oportunidad import SolicitudPropuestaOportunidad
 from ..models.solicitud_propuesta_programa import SolicitudPropuestaPrograma as SolicitudPPModel
 from ..schemas.solicitudes_daf import SolicitudAlumnoDafMontoCreate, SolicitudAlumnoDafMontoResponse
+
 from ..schemas.solicitud import SolicitudPropuestaProgramaCreate, SolicitudPropuestaProgramaResponse
 import datetime
+# --- NUEVO: Schemas para solicitud de becado ---
+from pydantic import Field
 
+
+class SolicitudAlumnoDafBecadoCreate(BaseModel):
+    id_propuesta: int
+    id_propuesta_oportunidad: int
+    id_usuario_generador: int
+    id_usuario_receptor: int
+    comentario: Optional[str] = None
+
+class SolicitudAlumnoDafBecadoResponse(BaseModel):
+    id_solicitud: int
+    id_propuesta: int
+    id_propuesta_oportunidad: int
+    id_usuario_generador: int
+    id_usuario_receptor: int
+    aceptado_por_responsable: bool
+    tipo_solicitud: str
+    valor_solicitud: str
+    comentario: Optional[str]
+    monto_propuesto: float
+    # etapa_venta_propuesto eliminado porque no existe en el modelo ni en la base de datos
+
+    class Config:
+        orm_mode = True
+
+
+# Unificar router para que ambos endpoints estén bajo el mismo objeto y no se sobrescriba
 router = APIRouter(
-    prefix="/solicitudes/daf/oportunidad/monto",
+    prefix="/solicitudes/daf/oportunidad",
     tags=["Solicitudes DAF"],
     responses={404: {"description": "Not found"}},
 )
 
-@router.post("/", response_model=SolicitudAlumnoDafMontoResponse)
+@router.post("/becado", response_model=SolicitudAlumnoDafBecadoResponse)
+def create_solicitud_alumno_daf_becado(
+    solicitud_data: SolicitudAlumnoDafBecadoCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Crear solicitud de supresión de becado (etapa_venta_propuesto = 'Alumno Becado', monto_propuesto=0)
+    """
+    try:
+        nueva_solicitud = Solicitud(
+            id_propuesta=solicitud_data.id_propuesta,
+            id_usuario_generador=solicitud_data.id_usuario_generador,
+            id_usuario_receptor=solicitud_data.id_usuario_receptor,
+            aceptado_por_responsable=False,
+            tipo_solicitud="ELIMINACION_BECADO",
+            valor_solicitud="PENDIENTE",
+            comentario=solicitud_data.comentario if solicitud_data.comentario else "Supresión de becado por DAF",
+            creado_en=datetime.datetime.now()
+        )
+        db.add(nueva_solicitud)
+        db.flush()
+
+        nueva_solicitud_oportunidad = SolicitudPropuestaOportunidad(
+            id_solicitud=nueva_solicitud.id_solicitud,
+            id_propuesta_oportunidad=solicitud_data.id_propuesta_oportunidad,
+            monto_propuesto=0,
+            monto_objetado=0,
+        )
+        db.add(nueva_solicitud_oportunidad)
+        db.commit()
+        db.refresh(nueva_solicitud)
+        db.refresh(nueva_solicitud_oportunidad)
+
+        return SolicitudAlumnoDafBecadoResponse(
+            id_solicitud=nueva_solicitud.id_solicitud,
+            id_propuesta=nueva_solicitud.id_propuesta,
+            id_propuesta_oportunidad=nueva_solicitud_oportunidad.id_propuesta_oportunidad,
+            id_usuario_generador=nueva_solicitud.id_usuario_generador,
+            id_usuario_receptor=nueva_solicitud.id_usuario_receptor,
+            aceptado_por_responsable=nueva_solicitud.aceptado_por_responsable,
+            tipo_solicitud=nueva_solicitud.tipo_solicitud,
+            valor_solicitud=nueva_solicitud.valor_solicitud,
+            comentario=nueva_solicitud.comentario,
+            monto_propuesto=nueva_solicitud_oportunidad.monto_propuesto or 0
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creando solicitud de becado: {str(e)}"
+        )
+
+
+@router.post("/monto", response_model=SolicitudAlumnoDafMontoResponse)
 def create_solicitud_alumno_daf_monto(
     solicitud_data: SolicitudAlumnoDafMontoCreate,
     db: Session = Depends(get_db)
@@ -46,8 +128,8 @@ def create_solicitud_alumno_daf_monto(
         nueva_solicitud_oportunidad = SolicitudPropuestaOportunidad(
             id_solicitud=nueva_solicitud.id_solicitud,
             id_propuesta_oportunidad=solicitud_data.id_propuesta_oportunidad,
-            monto_propuesto=solicitud_data.monto_propuesto,
-            monto_objetado=solicitud_data.monto_objetado
+            monto_propuesto=solicitud_data.monto_propuesto or 0,
+            monto_objetado=solicitud_data.monto_objetado or 0
         )
         
         db.add(nueva_solicitud_oportunidad)
@@ -66,8 +148,8 @@ def create_solicitud_alumno_daf_monto(
             tipo_solicitud=nueva_solicitud.tipo_solicitud,
             valor_solicitud=nueva_solicitud.valor_solicitud,
             comentario=nueva_solicitud.comentario,
-            monto_propuesto=nueva_solicitud_oportunidad.monto_propuesto,
-            monto_objetado=nueva_solicitud_oportunidad.monto_objetado
+            monto_propuesto=nueva_solicitud_oportunidad.monto_propuesto or 0,
+            monto_objetado=nueva_solicitud_oportunidad.monto_objetado or 0
         )
         
     except Exception as e:

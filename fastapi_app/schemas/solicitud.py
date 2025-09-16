@@ -17,6 +17,7 @@ class SolicitudCreate(SolicitudBase):
 class Solicitud(SolicitudBase):
     id_solicitud: int
     creado_en: Optional[datetime]
+    abierta: bool = False
     class Config:
         orm_mode = True
 

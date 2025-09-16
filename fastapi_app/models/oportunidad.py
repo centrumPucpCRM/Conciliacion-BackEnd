@@ -14,6 +14,8 @@ class Oportunidad(Base):
     descuento = Column(DECIMAL(30,4))
     monto = Column(DECIMAL(30, 2))
     fecha_matricula = Column(Date)
+    party_number = Column(String(50))
+    conciliado = Column(Boolean, default=False)
     #Posibles calculados
     posible_atipico = Column(Boolean)
     becado = Column(Boolean)
