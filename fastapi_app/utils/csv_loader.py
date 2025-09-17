@@ -14,6 +14,7 @@ from ..models.propuesta import Propuesta
 from ..models.tipo_cambio import TipoCambio
 from ..models.propuesta_oportunidad import PropuestaOportunidad
 from ..models.propuesta_programa import PropuestaPrograma
+from ..models.solicitud import Solicitud
 
 async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
@@ -88,20 +89,7 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
         db.add(propuesta_unica)
         db.flush()
         # ...existing code...
-        # Eliminar primero los registros de usuario_cartera relacionados usando SQL directo
-        usuarios_rol1 = db.query(Usuario).filter(Usuario.id_rol == 1).all()
-        id_usuarios_rol1 = [usuario.id_usuario for usuario in usuarios_rol1]
-        if id_usuarios_rol1:
-            # Usar SQL directo para evitar StaleDataError
-            db.execute(
-                "DELETE FROM usuario_cartera WHERE id_usuario IN :ids",
-                {"ids": tuple(id_usuarios_rol1)}
-            )
-            db.flush()
-        for usuario in usuarios_rol1:
-            db.delete(usuario)
-        db.flush()
-        # ...existing code...
+        # Ya no se elimina ningún usuario ni usuario_cartera. Solo actualizar si existe, crear si no.
         carteras_dict = {}
         if 'cartera.nombre' in df.columns:
             for cartera_nombre in df['cartera.nombre'].dropna().unique():
@@ -112,7 +100,6 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
                     db.add(cartera)
                     db.flush()
                 carteras_dict[cartera_nombre] = cartera
-        # ...existing code...
         from ..models.rol_permiso import Rol
         rol = db.query(Rol).filter(Rol.id_rol == 1).first()
         if not rol:
@@ -312,6 +299,42 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
                     etapa_venta_propuesto=oportunidad.etapa_venta
                 )
                 db.add(propuesta_oportunidad)
+        # Crear solicitudes de aprobacion comercial para los subdirectores comerciales
+        subdirector_role = db.query(Rol).filter(Rol.nombre == "Comercial - Subdirector").first()
+        daf_subdirector_role = db.query(Rol).filter(Rol.nombre == "DAF - Subdirector").first()
+        subdirectores_comerciales = []
+        if subdirector_role:
+            subdirectores_comerciales = db.query(Usuario).filter(Usuario.id_rol == subdirector_role.id_rol).all()
+        if subdirectores_comerciales:
+            if not daf_subdirector_role:
+                raise HTTPException(status_code=404, detail="No se encontro el rol 'DAF - Subdirector'")
+            daf_subdirector = db.query(Usuario).filter(Usuario.id_rol == daf_subdirector_role.id_rol).first()
+            if not daf_subdirector:
+                raise HTTPException(status_code=404, detail="No se encontro un usuario con rol 'DAF - Subdirector'")
+            for subdirector in subdirectores_comerciales:
+                solicitud_existente = db.query(Solicitud).filter(
+                    Solicitud.id_propuesta == propuesta_unica.id_propuesta,
+                    Solicitud.id_usuario_generador == subdirector.id_usuario,
+                    Solicitud.tipo_solicitud == "APROBACION_COMERCIAL"
+                ).first()
+                if solicitud_existente:
+                    continue
+                comentario = (
+                    f"{subdirector.nombres} confirma, en calidad de Subdirector Comercial, "
+                    "que su cartera ha sido conciliada con los Jefes de Producto."
+                )
+                nueva_solicitud = Solicitud(
+                    id_propuesta=propuesta_unica.id_propuesta,
+                    id_usuario_generador=subdirector.id_usuario,
+                    id_usuario_receptor=daf_subdirector.id_usuario,
+                    aceptado_por_responsable=False,
+                    tipo_solicitud="APROBACION_COMERCIAL",
+                    valor_solicitud="PENDIENTE",
+                    comentario=comentario,
+                    creado_en=datetime.datetime.now(),
+                    abierta=True
+                )
+                db.add(nueva_solicitud)
         db.commit()
         return {
             "status": "success",
@@ -325,3 +348,7 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
         print(str(e))
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error general en process_csv_data: {str(e)}")
+
+
+
+

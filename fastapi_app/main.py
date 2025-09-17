@@ -25,6 +25,7 @@ from .routers import (
 )
 from .routers import rol as rol_router, csv_upload, roles_usuarios_carteras, propuesta_programas
 from .routers import solicitudes_jp, solicitudes_alumnos
+from .routers.solicitudes_pre_conciliacion import router as solicitudes_pre_conciliacion_router
 from .routers.solicitudes_daf import programa_router as daf_programa_router
 
 # Declaración explícita para uso global en main.py
@@ -49,7 +50,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Administrador": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": True,
         "puedeCancelar": True,
@@ -58,7 +59,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Comercial - Jefe de producto": {
         "GENERADA": False,
         "PRECONCILIADA": True,
-        "AUTORIZACION": False,
+        "APROBACION": False,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -67,7 +68,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Comercial - Subdirector": {
         "GENERADA": False,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -76,7 +77,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "DAF - Subdirector": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -85,7 +86,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "DAF - Supervisor": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": False,
+        "APROBACION": False,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -97,7 +98,7 @@ DEFAULT_MATRIZ_PERMISOS = {
 PERMISOS_CATALOGO = [
     "GENERADA",
     "PRECONCILIADA",
-    "AUTORIZACION",
+    "APROBACION",
     "CONCILIADO",
     "CANCELADO",
     "puedeCancelar",
