@@ -50,7 +50,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Administrador": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": True,
         "puedeCancelar": True,
@@ -59,7 +59,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Comercial - Jefe de producto": {
         "GENERADA": False,
         "PRECONCILIADA": True,
-        "AUTORIZACION": False,
+        "APROBACION": False,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -68,7 +68,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "Comercial - Subdirector": {
         "GENERADA": False,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -77,7 +77,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "DAF - Subdirector": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": True,
+        "APROBACION": True,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -86,7 +86,7 @@ DEFAULT_MATRIZ_PERMISOS = {
     "DAF - Supervisor": {
         "GENERADA": True,
         "PRECONCILIADA": True,
-        "AUTORIZACION": False,
+        "APROBACION": False,
         "CONCILIADO": True,
         "CANCELADO": False,
         "puedeCancelar": False,
@@ -98,7 +98,7 @@ DEFAULT_MATRIZ_PERMISOS = {
 PERMISOS_CATALOGO = [
     "GENERADA",
     "PRECONCILIADA",
-    "AUTORIZACION",
+    "APROBACION",
     "CONCILIADO",
     "CANCELADO",
     "puedeCancelar",
