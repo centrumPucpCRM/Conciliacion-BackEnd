@@ -88,20 +88,7 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
         db.add(propuesta_unica)
         db.flush()
         # ...existing code...
-        # Eliminar primero los registros de usuario_cartera relacionados usando SQL directo
-        usuarios_rol1 = db.query(Usuario).filter(Usuario.id_rol == 1).all()
-        id_usuarios_rol1 = [usuario.id_usuario for usuario in usuarios_rol1]
-        if id_usuarios_rol1:
-            # Usar SQL directo para evitar StaleDataError
-            db.execute(
-                "DELETE FROM usuario_cartera WHERE id_usuario IN :ids",
-                {"ids": tuple(id_usuarios_rol1)}
-            )
-            db.flush()
-        for usuario in usuarios_rol1:
-            db.delete(usuario)
-        db.flush()
-        # ...existing code...
+        # Ya no se elimina ningún usuario ni usuario_cartera. Solo actualizar si existe, crear si no.
         carteras_dict = {}
         if 'cartera.nombre' in df.columns:
             for cartera_nombre in df['cartera.nombre'].dropna().unique():
@@ -112,7 +99,6 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
                     db.add(cartera)
                     db.flush()
                 carteras_dict[cartera_nombre] = cartera
-        # ...existing code...
         from ..models.rol_permiso import Rol
         rol = db.query(Rol).filter(Rol.id_rol == 1).first()
         if not rol:

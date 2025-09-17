@@ -1,5 +1,4 @@
 
-
 from fastapi import Body
 from ..models.propuesta_oportunidad import PropuestaOportunidad
 # Endpoint para actualizar cualquier campo de PropuestaOportunidad por id
@@ -37,7 +36,7 @@ def actualizar_estado_solicitud_accion(
     if not solicitud:
         raise HTTPException(status_code=404, detail=f"Solicitud con ID {id_solicitud} no encontrada")
     if accion == 'RECHAZAR':
-        solicitud.abierta = False
+        solicitud.abierta = True
         solicitud.valor_solicitud = 'RECHAZADO'
     elif accion == 'ACEPTAR':
         solicitud.abierta = False
@@ -278,3 +277,90 @@ def update_solicitud_by_id(
         if spo:
             db.refresh(spo)
     return updated
+
+from pydantic import BaseModel
+import datetime
+# Modelo para crear solicitud de agregar alumno
+class SolicitudAgregarAlumnoCreate(BaseModel):
+    id_propuesta: int
+    id_propuesta_oportunidad: int
+    id_usuario_generador: int
+    id_usuario_receptor: int
+    comentario: str = None
+    etapa_venta_propuesto: str
+
+# Modelo de respuesta
+class SolicitudAgregarAlumnoResponse(BaseModel):
+    id_solicitud: int
+    id_propuesta: int
+    id_propuesta_oportunidad: int
+    id_usuario_generador: int
+    id_usuario_receptor: int
+    aceptado_por_responsable: bool
+    tipo_solicitud: str
+    valor_solicitud: str
+    comentario: str
+    etapa_venta_propuesto: str
+# Endpoint para crear solicitud de agregar alumno
+@router.post("/agregar-alumno", response_model=SolicitudAgregarAlumnoResponse)
+def create_solicitud_agregar_alumno(
+    solicitud_data: SolicitudAgregarAlumnoCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Crea una solicitud de tipo AGREGAR_ALUMNO y actualiza etapa_venta_propuesto en PropuestaOportunidad
+    """
+    try:
+        # Actualizar etapa_venta_propuesto en PropuestaOportunidad
+        propuesta_oportunidad = db.query(PropuestaOportunidad).filter(
+            PropuestaOportunidad.id_propuesta_oportunidad == solicitud_data.id_propuesta_oportunidad
+        ).first()
+        if not propuesta_oportunidad:
+            raise HTTPException(status_code=404, detail="PropuestaOportunidad no encontrada")
+        propuesta_oportunidad.etapa_venta_propuesto = solicitud_data.etapa_venta_propuesto
+        db.flush()
+
+        # Crear la solicitud principal
+        nueva_solicitud = Solicitud(
+            id_propuesta=solicitud_data.id_propuesta,
+            id_usuario_generador=solicitud_data.id_usuario_generador,
+            id_usuario_receptor=solicitud_data.id_usuario_receptor,
+            aceptado_por_responsable=False,
+            tipo_solicitud="AGREGAR_ALUMNO",
+            valor_solicitud="PENDIENTE",
+            comentario=solicitud_data.comentario if solicitud_data.comentario else "Solicitud de agregar alumno",
+            creado_en=datetime.datetime.now()
+        )
+        db.add(nueva_solicitud)
+        db.flush()
+
+        # Crear el vínculo en SolicitudPropuestaOportunidad
+        nueva_solicitud_oportunidad = SolicitudPropuestaOportunidad(
+            id_solicitud=nueva_solicitud.id_solicitud,
+            id_propuesta_oportunidad=solicitud_data.id_propuesta_oportunidad
+        )
+        db.add(nueva_solicitud_oportunidad)
+        db.commit()
+        db.refresh(nueva_solicitud)
+        db.refresh(nueva_solicitud_oportunidad)
+        db.refresh(propuesta_oportunidad)
+
+        return SolicitudAgregarAlumnoResponse(
+            id_solicitud=nueva_solicitud.id_solicitud,
+            id_propuesta=nueva_solicitud.id_propuesta,
+            id_propuesta_oportunidad=nueva_solicitud_oportunidad.id_propuesta_oportunidad,
+            id_usuario_generador=nueva_solicitud.id_usuario_generador,
+            id_usuario_receptor=nueva_solicitud.id_usuario_receptor,
+            aceptado_por_responsable=nueva_solicitud.aceptado_por_responsable,
+            tipo_solicitud=nueva_solicitud.tipo_solicitud,
+            valor_solicitud=nueva_solicitud.valor_solicitud,
+            comentario=nueva_solicitud.comentario,
+            etapa_venta_propuesto=propuesta_oportunidad.etapa_venta_propuesto
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creando solicitud de agregar alumno: {str(e)}"
+        )
+

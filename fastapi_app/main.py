@@ -25,6 +25,7 @@ from .routers import (
 )
 from .routers import rol as rol_router, csv_upload, roles_usuarios_carteras, propuesta_programas
 from .routers import solicitudes_jp, solicitudes_alumnos
+from .routers.solicitudes_pre_conciliacion import router as solicitudes_pre_conciliacion_router
 from .routers.solicitudes_daf import programa_router as daf_programa_router
 
 # Declaración explícita para uso global en main.py
