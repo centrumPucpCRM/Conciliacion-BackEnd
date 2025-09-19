@@ -1,5 +1,3 @@
-import csv
-import io
 import pandas as pd
 import datetime
 from typing import Dict, List, Any, Optional
@@ -16,16 +14,46 @@ from ..models.propuesta_oportunidad import PropuestaOportunidad
 from ..models.propuesta_programa import PropuestaPrograma
 from ..models.solicitud import Solicitud
 
-async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Procesa datos CSV de conciliación ya convertidos a formato JSON y crea los registros
     correspondientes en la base de datos."""
 
     try:
         # ...existing code...
-        df = pd.DataFrame(data)
+        print(data)
+        detalle = data.get("detalle") if isinstance(data, dict) else None
+        df = None
+        if detalle:
+            df = pd.DataFrame(detalle)
+        else:
+            csv_url = data.get("csv_url") if isinstance(data, dict) else None
+            if not csv_url:
+                raise HTTPException(status_code=400, detail="No se proporcion� ni 'detalle' ni 'csv_url' para procesar el archivo de conciliaci�n")
+            try:
+                df = pd.read_csv(csv_url)
+            except Exception as csv_error:
+                raise HTTPException(status_code=400, detail=f"No se pudo leer el CSV desde la URL proporcionada: {csv_error}")
+
+        if df is None or df.empty:
+            raise HTTPException(status_code=400, detail="El archivo CSV no contiene registros para procesar")
+
+        df = df.copy()
         # ...existing code...
         df.columns = df.columns.str.strip()
+        # ...existing code...
+        propuesta_info = data.get("propuesta") if isinstance(data, dict) else {}
+        selected_carteras = []
+        if isinstance(propuesta_info, dict):
+            raw_carteras = propuesta_info.get("carteras")
+            if isinstance(raw_carteras, list) and raw_carteras:
+                selected_carteras = [str(cartera).strip() for cartera in raw_carteras if cartera is not None]
+
+        if selected_carteras and 'cartera.nombre' in df.columns:
+            df['cartera.nombre'] = df['cartera.nombre'].apply(lambda value: str(value).strip() if pd.notna(value) else value)
+            df = df[df['cartera.nombre'].isin(selected_carteras)]
+            if df.empty:
+                raise HTTPException(status_code=400, detail="No se encontraron registros para las carteras seleccionadas en el CSV")
         # ...existing code...
         columns_mapping = {
             'usuario.nombre': 'usuario.nombre',
@@ -78,7 +106,9 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
                 df[col] = df[col].apply(robust_parse)
         # ...existing code...
         now = datetime.datetime.now()
-        propuesta_nombre = f"Propuesta_{now.strftime('%Y%m%d_%H%M%S')}"
+        propuesta_info = data.get("propuesta") if isinstance(data, dict) else {}
+        # Cambia aquí: usa el nombre que viene del frontend si existe
+        propuesta_nombre = propuesta_info.get("nombre") or f"Propuesta_{now.strftime('%Y%m%d_%H%M%S')}"
         propuesta_unica = Propuesta(
             nombre=propuesta_nombre,
             descripcion="Propuesta generada automáticamente desde archivo CSV",
@@ -342,6 +372,8 @@ async def process_csv_data(db: Session, data: List[Dict[str, Any]]) -> Dict[str,
             "propuesta_id": propuesta_unica.id_propuesta,
             "propuesta_nombre": propuesta_unica.nombre
         }
+    except HTTPException:
+        raise
     except Exception as e:
         import traceback
         print("ERROR GENERAL EN process_csv_data:")
