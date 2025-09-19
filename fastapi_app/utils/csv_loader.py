@@ -106,7 +106,9 @@ async def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
                 df[col] = df[col].apply(robust_parse)
         # ...existing code...
         now = datetime.datetime.now()
-        propuesta_nombre = f"Propuesta_{now.strftime('%Y%m%d_%H%M%S')}"
+        propuesta_info = data.get("propuesta") if isinstance(data, dict) else {}
+        # Cambia aquí: usa el nombre que viene del frontend si existe
+        propuesta_nombre = propuesta_info.get("nombre") or f"Propuesta_{now.strftime('%Y%m%d_%H%M%S')}"
         propuesta_unica = Propuesta(
             nombre=propuesta_nombre,
             descripcion="Propuesta generada automáticamente desde archivo CSV",
