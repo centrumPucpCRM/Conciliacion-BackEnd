@@ -263,61 +263,84 @@ async def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
                 )
                 db.add(propuesta_programa)
         db.flush()
-        for _, row in df.iterrows():
-            if pd.notna(row.get('oportunidad.nombre')) and pd.notna(row.get('programa.codigo')):
-                oportunidad_nombre = str(row['oportunidad.nombre']).strip()
-                programa_codigo = str(row['programa.codigo']).strip()
-                programa = programas_dict.get(programa_codigo)
-                if not programa:
-                    continue
-                descuento = parse_float(row.get('oportunidad.descuento', 0)) if pd.notna(row.get('oportunidad.descuento')) else 0.0
-                def es_atipico(desc, monto=None, precio_lista=None):
-                    if not isinstance(desc, float):
-                        return False
-                    if desc < 0 or desc > 1:
+        # Procesamiento por lotes en paralelo por programa.codigo
+        import concurrent.futures
+        from sqlalchemy.orm import sessionmaker
+        from sqlalchemy import create_engine
+        # Asume que tienes acceso a la cadena de conexión de la base de datos
+        # Si usas FastAPI y tienes el engine global, reemplaza esto por tu engine
+        engine = db.get_bind()
+        SessionLocal = sessionmaker(bind=engine)
+
+        def es_atipico(desc, monto=None, precio_lista=None):
+            if not isinstance(desc, float):
+                return False
+            if desc < 0 or desc > 1:
+                return True
+            decimales = str(desc).split('.')
+            if len(decimales) == 2:
+                dec = decimales[1].ljust(4, '0')
+                if dec[2] != '0' or dec[3] != '0':
+                    return True
+            if monto is not None and precio_lista is not None and precio_lista != 0:
+                ratio = monto / precio_lista
+                ratio_decimales = str(ratio).split('.')
+                if len(ratio_decimales) == 2:
+                    ratio_dec = ratio_decimales[1].ljust(4, '0')
+                    if ratio_dec[2] != '0' or ratio_dec[3] != '0':
                         return True
-                    decimales = str(desc).split('.')
-                    if len(decimales) == 2:
-                        dec = decimales[1].ljust(4, '0')
-                        if dec[2] != '0' or dec[3] != '0':
-                            return True
-                    if monto is not None and precio_lista is not None and precio_lista != 0:
-                        ratio = monto / precio_lista
-                        ratio_decimales = str(ratio).split('.')
-                        if len(ratio_decimales) == 2:
-                            ratio_dec = ratio_decimales[1].ljust(4, '0')
-                            if ratio_dec[2] != '0' or ratio_dec[3] != '0':
-                                return True
-                    return False
-                oportunidad_data = {
-                    'nombre': oportunidad_nombre,
-                    'documento_identidad': str(row.get('oportunidad.documento_identidad', '')).strip() if pd.notna(row.get('oportunidad.documento_identidad')) else '',
-                    'correo': str(row.get('oportunidad.correo', '')).strip() if pd.notna(row.get('oportunidad.correo')) else '',
-                    'telefono': str(row.get('oportunidad.telefono', '')).strip() if pd.notna(row.get('oportunidad.telefono')) else '',
-                    'etapa_venta': str(row.get('oportunidad.etapa_venta', 'NUEVA')).strip() if pd.notna(row.get('oportunidad.etapa_venta')) else 'NUEVA',
-                    'descuento': descuento,
-                    'moneda': str(row.get('oportunidad.moneda', 'PEN')).strip() if pd.notna(row.get('oportunidad.moneda')) else 'PEN',
-                    'monto': parse_float(row.get('oportunidad.monto', 0)) if pd.notna(row.get('oportunidad.monto')) else 0.0,
-                    'becado': bool(row.get('oportunidad.becado', False)) if pd.notna(row.get('oportunidad.becado')) else False,
-                    'conciliado': bool(row.get('oportunidad.conciliado', False)) if pd.notna(row.get('oportunidad.conciliado')) else False,
-                    'posible_atipico': es_atipico(
-                        descuento, 
-                        parse_float(row.get('oportunidad.monto', 0)) if pd.notna(row.get('oportunidad.monto')) else 0.0,
-                        programa.precio_lista if programa and programa.precio_lista else 0
-                    ),
-                    'id_programa': programa.id_programa,
-                    'party_number': str(row.get('oportunidad.party_number', '')).strip() if pd.notna(row.get('oportunidad.party_number')) else '',
-                    'conciliado': bool(row.get('oportunidad.conciliado', False)) if pd.notna(row.get('oportunidad.conciliado')) else False  
-                }
-                oportunidad = Oportunidad(**oportunidad_data)
-                db.add(oportunidad)
-                db.flush()
-                propuesta_programa = db.query(PropuestaPrograma).filter(
+            return False
+
+        import time
+        def procesar_lote(lote_df):
+            inicio = time.time()
+            programa_codigo = str(lote_df.iloc[0]['programa.codigo']) if 'programa.codigo' in lote_df.columns else 'N/A'
+            print(f"[Lote {programa_codigo}] INICIO procesamiento: {datetime.datetime.now().strftime('%H:%M:%S')}")
+            session = SessionLocal()
+            oportunidades_bulk = []
+            propuestas_bulk = []
+            oportunidades_temp = []
+            for _, row in lote_df.iterrows():
+                if pd.notna(row.get('oportunidad.nombre')) and pd.notna(row.get('programa.codigo')):
+                    oportunidad_nombre = str(row['oportunidad.nombre']).strip()
+                    programa_codigo = str(row['programa.codigo']).strip()
+                    programa = session.query(Programa).filter(Programa.codigo == programa_codigo).first()
+                    if not programa:
+                        continue
+                    descuento = parse_float(row.get('oportunidad.descuento', 0)) if pd.notna(row.get('oportunidad.descuento')) else 0.0
+                    oportunidad_data = {
+                        'nombre': oportunidad_nombre,
+                        'documento_identidad': str(row.get('oportunidad.documento_identidad', '')).strip() if pd.notna(row.get('oportunidad.documento_identidad')) else '',
+                        'correo': str(row.get('oportunidad.correo', '')).strip() if pd.notna(row.get('oportunidad.correo')) else '',
+                        'telefono': str(row.get('oportunidad.telefono', '')).strip() if pd.notna(row.get('oportunidad.telefono')) else '',
+                        'etapa_venta': str(row.get('oportunidad.etapa_venta', 'NUEVA')).strip() if pd.notna(row.get('oportunidad.etapa_venta')) else 'NUEVA',
+                        'descuento': descuento,
+                        'moneda': str(row.get('oportunidad.moneda', 'PEN')).strip() if pd.notna(row.get('oportunidad.moneda')) else 'PEN',
+                        'monto': parse_float(row.get('oportunidad.monto', 0)) if pd.notna(row.get('oportunidad.monto')) else 0.0,
+                        'becado': bool(row.get('oportunidad.becado', False)) if pd.notna(row.get('oportunidad.becado')) else False,
+                        'conciliado': bool(row.get('oportunidad.conciliado', False)) if pd.notna(row.get('oportunidad.conciliado')) else False,
+                        'posible_atipico': es_atipico(
+                            descuento, 
+                            parse_float(row.get('oportunidad.monto', 0)) if pd.notna(row.get('oportunidad.monto')) else 0.0,
+                            programa.precio_lista if programa and programa.precio_lista else 0
+                        ),
+                        'id_programa': programa.id_programa,
+                        'party_number': str(row.get('oportunidad.party_number', '')).strip() if pd.notna(row.get('oportunidad.party_number')) else '',
+                        'conciliado': bool(row.get('oportunidad.conciliado', False)) if pd.notna(row.get('oportunidad.conciliado')) else False  
+                    }
+                    oportunidad = Oportunidad(**oportunidad_data)
+                    oportunidades_bulk.append(oportunidad)
+                    oportunidades_temp.append((oportunidad, programa_codigo, oportunidad_data))
+            session.bulk_save_objects(oportunidades_bulk)
+            session.flush()
+            for oportunidad, programa_codigo, oportunidad_data in oportunidades_temp:
+                programa = session.query(Programa).filter(Programa.codigo == programa_codigo).first()
+                propuesta_programa = session.query(PropuestaPrograma).filter(
                     PropuestaPrograma.id_propuesta == propuesta_unica.id_propuesta,
                     PropuestaPrograma.id_programa == programa.id_programa
                 ).first()
                 id_propuesta_programa = propuesta_programa.id_propuesta_programa if propuesta_programa else None
-                tipo_cambio = tipo_cambios.get(oportunidad_data['moneda'])
+                tipo_cambio = session.query(TipoCambio).filter(TipoCambio.moneda_origen == oportunidad_data['moneda'], TipoCambio.moneda_target == 'PEN').first()
                 id_tipo_cambio = tipo_cambio.id_tipo_cambio if tipo_cambio else None
                 monto_propuesto = oportunidad.monto
                 propuesta_oportunidad = PropuestaOportunidad(
@@ -328,7 +351,20 @@ async def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
                     monto_propuesto=monto_propuesto,
                     etapa_venta_propuesto=oportunidad.etapa_venta
                 )
-                db.add(propuesta_oportunidad)
+                propuestas_bulk.append(propuesta_oportunidad)
+            session.bulk_save_objects(propuestas_bulk)
+            session.commit()
+            session.close()
+            fin = time.time()
+            duracion = fin - inicio
+            print(f"[Lote {programa_codigo}] FIN procesamiento: {datetime.datetime.now().strftime('%H:%M:%S')} | Duración: {duracion:.2f} segundos")
+            return True
+
+        # Agrupa el DataFrame por cartera.nombre y procesa cada grupo en paralelo
+        grupos = [group for _, group in df.groupby('cartera.nombre')]
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [executor.submit(procesar_lote, grupo) for grupo in grupos]
+            concurrent.futures.wait(futures)
         # Crear solicitudes de aprobacion comercial para los subdirectores comerciales
         subdirector_role = db.query(Rol).filter(Rol.nombre == "Comercial - Subdirector").first()
         daf_subdirector_role = db.query(Rol).filter(Rol.nombre == "DAF - Subdirector").first()
