@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, ForeignKey, DECIMAL, String
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
 from ..database import Base
 
 class PropuestaPrograma(Base):
-    __tablename__ = "propuesta_programa"
-    id_propuesta_programa = Column(Integer, primary_key=True, index=True)
-    id_propuesta = Column(Integer, ForeignKey("propuesta.id_propuesta"))
-    id_programa = Column(Integer, ForeignKey("programa.id_programa"))
+    __tablename__ = 'propuesta_programa'
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255), nullable=False)
+    # Agrega aquí los campos y relaciones necesarios según tu modelo
