@@ -13,12 +13,17 @@ def login_usuario(
 ):
     nombre = data.get("nombre")
     clave = data.get("clave")
-    if not nombre or not clave:
-        raise HTTPException(status_code=400, detail="Nombre y clave requeridos")
-    import bcrypt
     user = db.query(Usuario).filter(Usuario.nombre == nombre).first()
-    if not user or not bcrypt.checkpw(clave.encode('utf-8'), user.clave.encode('utf-8')):
-        permisos = [p.descripcion for p in getattr(user, "permisos", []) if hasattr(p, "descripcion")]
+    if user and hasattr(user, "clave") and user.clave == clave:
+        # Get direct permissions
+        direct_perms = set(p.descripcion for p in getattr(user, "permisos", []) if hasattr(p, "descripcion"))
+        # Get permissions from roles
+        role_perms = set()
+        for rol in getattr(user, "roles", []):
+            for p in getattr(rol, "permisos", []):
+                if hasattr(p, "descripcion"):
+                    role_perms.add(p.descripcion)
+        permisos = list(direct_perms | role_perms)
         carteras = [c.nombre for c in getattr(user, "carteras", []) if hasattr(c, "nombre")]
         return {
             "usuario": {
