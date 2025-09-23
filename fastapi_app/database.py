@@ -4,6 +4,7 @@ import os
 import pymysql
 import logging
 
+<<<<<<< HEAD
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -50,6 +51,9 @@ create_database_if_not_exists()
 
 # URL de conexión a la base de datos específica
 DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+=======
+DATABASE_URL = "mysql+pymysql://admin:5QeWOnjYCvEA2lOtkCfc@conciliaciondb.ci1gweq8a0j0.us-east-1.rds.amazonaws.com:3306/conciliacion"
+>>>>>>> 26b70215ab6aeb228b84115dc030ef5e4c4fc4e7
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

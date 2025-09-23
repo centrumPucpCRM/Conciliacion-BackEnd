@@ -1,22 +1,27 @@
-from sqlalchemy import Column, Date, Integer, String, DateTime, Boolean, DECIMAL, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from ..database import Base
 
 class Oportunidad(Base):
-    __tablename__ = "oportunidad"
-    id_oportunidad = Column(Integer, primary_key=True, index=True)
-    id_programa = Column(Integer, ForeignKey("programa.id_programa"))
-    nombre = Column(String(200), nullable=False)
-    documento_identidad = Column(String(50), nullable=False)
-    correo = Column(String(150))
+    __tablename__ = 'oportunidad'
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255))
+    documentoIdentidad = Column(String(255))
+    correo = Column(String(255))
     telefono = Column(String(50))
-    etapa_venta = Column(String(80))
-    moneda = Column(String(50))
-    descuento = Column(DECIMAL(30,4))
-    monto = Column(DECIMAL(30, 2))
-    fecha_matricula = Column(Date)
-    party_number = Column(String(50))
+    etapaDeVentas = Column(String(255))
+    descuento = Column(Float)
+    monto = Column(Float)
+    becado = Column(Boolean, default=False)
+    partyNumber = Column(Integer)
     conciliado = Column(Boolean, default=False)
-    #Posibles calculados
-    posible_atipico = Column(Boolean)
-    becado = Column(Boolean)
-    conciliado = Column(Boolean)
+    posibleAtipico = Column(Boolean, default=False)
+    idPropuesta = Column(Integer, ForeignKey('propuesta.id'))
+    propuesta = relationship('Propuesta')
+    idPrograma = Column(Integer, ForeignKey('programa.id'))
+    programa = relationship('Programa')
+    idTipoCambio = Column(Integer, ForeignKey('tipo_cambio.id'))
+    tipoCambio = relationship('TipoCambio')
+    montoPropuesto = Column(Float)
+    etapaVentaPropuesta = Column(String(255))
+    eliminado = Column(Boolean, default=False)

@@ -1,24 +1,18 @@
-from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean
 from sqlalchemy.orm import relationship
 from ..database import Base
+from .associations import usuario_cartera
+from .rol_permiso import usuario_rol_association, usuario_permiso_association
 
 
 class Usuario(Base):
-    __tablename__ = "usuario"
-    id_usuario = Column(Integer, primary_key=True, index=True)
-    dni = Column(String(20), nullable=True)
-    correo = Column(String(120), unique=True, nullable=False)
-    nombres = Column(String(150), nullable=False)
-    celular = Column(String(30), nullable=True)
-    id_rol = Column(Integer, ForeignKey("rol.id_rol"), nullable=False)
-
-    # Relación con el modelo Rol
-    rol = relationship("Rol", back_populates="usuarios")
-
-    # Relación muchos-a-muchos con Cartera
-    carteras = relationship(
-        "Cartera",
-        secondary="usuario_cartera",
-        back_populates="usuarios",
-        lazy="joined"  # Optimización para cargar relaciones
-    )
+    __tablename__ = 'usuario'
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255))
+    clave = Column(String(255))
+    documentoIdentidad = Column(String(50), unique=True)
+    correo = Column(String(255))
+    activo = Column(Boolean)
+    roles = relationship('Rol', secondary=usuario_rol_association, back_populates='usuarios')
+    permisos = relationship('Permiso', secondary=usuario_permiso_association, back_populates='usuarios')
+    carteras = relationship('Cartera', secondary=usuario_cartera, back_populates='usuarios')
