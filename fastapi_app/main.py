@@ -40,7 +40,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.include_router(usuario_router.router)
+app.include_router(usuario_router.router)
 app.include_router(cartera.router)
 # app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)

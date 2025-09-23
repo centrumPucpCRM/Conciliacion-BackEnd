@@ -147,36 +147,42 @@ def crear_usuarios_predeterminados():
             "documentoIdentidad": None,
             "correo": "132465789@pucp.edu.pe",
             "rol_nombre": "DAF - Supervisor",
+            "clave": "daf.supervisor"
         },
         {
             "nombre": "daf.subdirector",
             "documentoIdentidad": None,
-            "correo": "132465789-sub@pucp.edu.pe",
+            "correo": "123456789-sub@pucp.edu.pe",
             "rol_nombre": "DAF - Subdirector",
+            "clave": "daf.subdirector"
         },
         {
             "nombre": "admin",
             "documentoIdentidad": None,
             "correo": "admin@pucp.edu.pe",
             "rol_nombre": "Administrador",
+            "clave": "admin"
         },
         {
             "nombre": "Jefe grado",
             "documentoIdentidad": None,
             "correo": "jefe.grado@pucp.edu.pe",
             "rol_nombre": "Comercial - Subdirector",
+            "clave": "jefe.grado"
         },
         {
             "nombre": "Jefe ee",
             "documentoIdentidad": None,
             "correo": "jefe.ee@pucp.edu.pe",
             "rol_nombre": "Comercial - Subdirector",
+            "clave": "jefe.ee"
         },
         {
             "nombre": "Jefe CentrumX",
             "documentoIdentidad": None,
             "correo": "jefe.centrumx@pucp.edu.pe",
             "rol_nombre": "Comercial - Subdirector",
+            "clave": "jefe.centrumx"
         },
     ]
 
@@ -194,6 +200,7 @@ def crear_usuarios_predeterminados():
                     nombre=info["nombre"],
                     documentoIdentidad=info["documentoIdentidad"],
                     correo=info["correo"],
+                    clave=info["clave"]
                 )
                 db.add(nuevo)
                 db.flush()
@@ -241,7 +248,7 @@ def crearPermisosPredeterminados():
         logging.error(f"Error al crear permisos predeterminados: {e}")
     finally:
         db.close()
-def crearRolesPredeterminados():
+def crearRoles_x_PermisosPredeterminados():
     permisos_rol = {
         "Administrador": {
             "BotonVerGeneracion",
@@ -341,9 +348,9 @@ def seed_defaults():
     logging.info(f"Tiempo crearPermisosPredeterminados: {tiempos['crearPermisosPredeterminados']:.4f} s")
 
     start = time.time()
-    crearRolesPredeterminados()
-    tiempos['crearRolesPredeterminados'] = time.time() - start
-    logging.info(f"Tiempo crearRolesPredeterminados: {tiempos['crearRolesPredeterminados']:.4f} s")
+    crearRoles_x_PermisosPredeterminados()
+    tiempos['crearRoles_x_PermisosPredeterminados'] = time.time() - start
+    logging.info(f"Tiempo crearRoles_x_PermisosPredeterminados: {tiempos['crearRoles_x_PermisosPredeterminados']:.4f} s")
 
     start = time.time()
     seed_lovs()

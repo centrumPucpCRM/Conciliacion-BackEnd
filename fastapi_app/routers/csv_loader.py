@@ -26,7 +26,6 @@ async def procesar_csv_endpoint(
         example={
             "propuesta": {
                 "nombre": "nombrePropuesta",
-                "fecha": "2025-09-22",
                 "carteras": [
                     "In Company",
                     "EE Estrategia, Gestión y Talento",
