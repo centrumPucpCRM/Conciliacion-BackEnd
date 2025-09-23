@@ -6,6 +6,15 @@ from .maininit import seed_defaults
 from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambio, conciliacion, propuesta, programa, solicitud, log
 from .routers import csv_loader
 
+
+# Configura logging para mostrar en consola
+import sys
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.info("🚀 Startup: ejecutando seed (roles/usuarios/permisos)…")

@@ -5,6 +5,7 @@ from sqlalchemy import insert, select, inspect, text
 from .database import engine, Base, SessionLocal
 from .models.rol_permiso import Rol, usuario_rol_association
 from .models.usuario import Usuario
+from .models.rol_permiso import Permiso
 
 def seed_lovs():
     """
@@ -213,12 +214,141 @@ def crear_usuarios_predeterminados():
     finally:
         db.close()
 
+def crearPermisosPredeterminados():
+    permisos = [
+        "BotonVerGeneracion",
+        "BotonVerPreConciliacion",
+        "BotonVerAprobacion",
+        "BotonVerConciliacion",
+        "BotonVerCancelacion",
+        "BotonVerProgramacion",
+        "BotonVerPuedeCancelarTodo",
+        "TablaGeneracionEditar",
+        "TablaPreConciliacionEditar",
+        "BotonAgregarAlumnoPreConciliacion",
+        "DisplayVerTodosRoles",
+        "DisplayVerRolesSubComerciales",
+    ]
+    db: Session = SessionLocal()
+    try:
+        existentes = {p.descripcion for p in db.query(Permiso).all()}
+        for descripcion in permisos:
+            if descripcion not in existentes:
+                db.add(Permiso(descripcion=descripcion))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error al crear permisos predeterminados: {e}")
+    finally:
+        db.close()
+def crearRolesPredeterminados():
+    permisos_rol = {
+        "Administrador": {
+            "BotonVerGeneracion",
+            "BotonVerPreConciliacion",
+            "BotonVerAprobacion",
+            "BotonVerConciliacion",
+            "BotonVerCancelacion",
+            "BotonVerProgramacion",
+            "BotonVerPuedeCancelarTodo",
+            "TablaGeneracionEditar",
+            "TablaPreConciliacionEditar",
+            "BotonAgregarAlumnoPreConciliacion",
+            "DisplayVerTodosRoles",
+            "DisplayVerRolesSubComerciales",
+        },
+        "Comercial - Jefe de producto": {
+            "BotonVerPreConciliacion",
+            "BotonVerAprobacion",
+            "BotonVerConciliacion",
+            "TablaPreConciliacionEditar",
+            "BotonAgregarAlumnoPreConciliacion",
+        },
+        "Comercial - Subdirector": {
+            "BotonVerPreConciliacion",
+            "BotonVerAprobacion",
+            "BotonVerConciliacion",
+            "DisplayVerRolesSubComerciales",
+        },
+        "DAF - Subdirector": {
+            "BotonVerGeneracion",
+            "BotonVerPreConciliacion",
+            "BotonVerAprobacion",
+            "BotonVerConciliacion",
+            "TablaGeneracionEditar",
+        },
+        "DAF - Supervisor": {
+            "BotonVerGeneracion",
+            "BotonVerPreConciliacion",
+            "BotonVerAprobacion",
+            "BotonVerConciliacion",
+            "TablaGeneracionEditar",
+        },
+    }
+
+    db: Session = SessionLocal()
+    try:
+        # Obtener todos los roles y permisos existentes
+        roles_db = {r.nombre: r for r in db.query(Rol).all()}
+        permisos_db = {p.descripcion: p for p in db.query(Permiso).all()}
+
+        for rol_nombre, permisos_set in permisos_rol.items():
+            rol = roles_db.get(rol_nombre)
+            if not rol:
+                continue
+            for permiso_desc in permisos_set:
+                permiso = permisos_db.get(permiso_desc)
+                if permiso and permiso not in rol.permisos:
+                    rol.permisos.append(permiso)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logging.error(f"Error al asociar permisos a roles: {e}")
+    finally:
+        db.close()
+
 def seed_defaults():
     """
     Ejecuta la siembra de datos predeterminados (usuarios, roles, permisos, etc.)
     """
+    import time
+    tiempos = {}
+    total_start = time.time()
+
+    start = time.time()
     Base.metadata.create_all(bind=engine, checkfirst=True)
+    tiempos['create_all'] = time.time() - start
+    logging.info(f"Tiempo create_all: {tiempos['create_all']:.4f} s")
+
+    start = time.time()
     sync_db_schema(drop_removed_columns=True)
+    tiempos['sync_db_schema'] = time.time() - start
+    logging.info(f"Tiempo sync_db_schema: {tiempos['sync_db_schema']:.4f} s")
+
+    start = time.time()
     crear_roles_predeterminados()
+    tiempos['crear_roles_predeterminados'] = time.time() - start
+    logging.info(f"Tiempo crear_roles_predeterminados: {tiempos['crear_roles_predeterminados']:.4f} s")
+
+    start = time.time()
     crear_usuarios_predeterminados()
+    tiempos['crear_usuarios_predeterminados'] = time.time() - start
+    logging.info(f"Tiempo crear_usuarios_predeterminados: {tiempos['crear_usuarios_predeterminados']:.4f} s")
+
+    start = time.time()
+    crearPermisosPredeterminados()
+    tiempos['crearPermisosPredeterminados'] = time.time() - start
+    logging.info(f"Tiempo crearPermisosPredeterminados: {tiempos['crearPermisosPredeterminados']:.4f} s")
+
+    start = time.time()
+    crearRolesPredeterminados()
+    tiempos['crearRolesPredeterminados'] = time.time() - start
+    logging.info(f"Tiempo crearRolesPredeterminados: {tiempos['crearRolesPredeterminados']:.4f} s")
+
+    start = time.time()
     seed_lovs()
+    tiempos['seed_lovs'] = time.time() - start
+    logging.info(f"Tiempo seed_lovs: {tiempos['seed_lovs']:.4f} s")
+
+    total_time = time.time() - total_start
+    logging.info(f"Tiempo total seed_defaults: {total_time:.4f} s")

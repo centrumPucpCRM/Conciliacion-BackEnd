@@ -368,7 +368,8 @@ def cargar_datos_base(db, data):
 def cargar_csv(data):
     fecha = data.get("fechaDatos")
     hora = data.get("horaDatos")
-    csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "_" + hora + ".csv"
+    csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "+" + hora + ".csv"
+    print(csv_url)
     df = pd.read_csv(csv_url, decimal=',')
     if df is None or df.empty:
         raise HTTPException(status_code=400, detail="El archivo CSV no contiene registros para procesar")
@@ -376,8 +377,30 @@ def cargar_csv(data):
     df.columns = df.columns.str.strip()
     return df
 
+def crearRelacionCarteraSubdirectoresYDAF(db: Session, df: pd.DataFrame, propuesta: Propuesta) -> None:
+    # Nombres de usuarios clave
+    nombres_usuarios = ["daf.supervisor","daf.subdirector",
+        "admin","Jefe grado","Jefe ee","Jefe CentrumX"]
 
+    # Buscar usuarios por nombre (ignorando mayúsculas/minúsculas y espacios)
+    usuarios = db.query(Usuario).filter(
+        Usuario.nombre.in_([n.strip() for n in nombres_usuarios])
+    ).all()
+    usuarios_dict = {u.nombre.strip().lower(): u for u in usuarios}
 
+    carteras_col = 'cartera.nombre'
+
+    nombres_carteras = [str(n).strip() for n in df[carteras_col].dropna().unique()]
+    carteras = db.query(Cartera).filter(Cartera.nombre.in_(nombres_carteras)).all()
+    carteras_dict = {c.nombre.strip(): c for c in carteras}
+
+    # Asignar todas las carteras a cada usuario clave
+    for usuario in usuarios_dict.values():
+        for cartera in carteras_dict.values():
+            if cartera not in usuario.carteras:
+                usuario.carteras.append(cartera)
+    db.flush()
+    
 def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
 # Alias para compatibilidad con el endpoint
     import time
@@ -419,13 +442,24 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         # 6. Crear solicitudes de aprobación por cartera y subdirección
         start = time.time()
         crear_solicitudes_Jp(db, df, propuesta_unica)
-        timings['generar_solicitudes_aprobacion'] = time.time() - start
-        print(f"Tiempo generar_solicitudes_aprobacion: {timings['generar_solicitudes_aprobacion']:.4f} segundos")
+        timings['crear_solicitudes_Jp'] = time.time() - start
+        print(f"Tiempo crear_solicitudes_Jp: {timings['crear_solicitudes_Jp']:.4f} segundos")
 
+        # 7 aca se tiene que crear una relacion entre la cartera que se esta ingresando y  
+        start = time.time()
+        crearRelacionCarteraSubdirectoresYDAF(db, df, propuesta_unica)
+        timings['crearRelacionCarteraSubdirectoresYDAF'] = time.time() - start
+        print(f"Tiempo crearRelacionCarteraSubdirectoresYDAF: {timings['crearRelacionCarteraSubdirectoresYDAF']:.4f} segundos")
+
+        
         # 7. Commit final para guardar todo lo demás
         db.commit()
         total_time = time.time() - total_start
         print(f"Tiempo total de ejecución: {total_time:.4f} segundos")
+        
+        
+        
+        
         return {
             "status": "success",
             "message": "CSV procesado con éxito",

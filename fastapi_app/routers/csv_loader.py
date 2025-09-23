@@ -46,7 +46,7 @@ async def procesar_csv_endpoint(
                 ]
             },
             "fechaDatos": "2025-06-16",
-            "horaDatos": "12PM"
+            "horaDatos": "11AM"
         },
         description="JSON con los datos de la propuesta y la URL pública del archivo CSV a procesar"
     ),
