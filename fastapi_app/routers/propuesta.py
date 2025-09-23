@@ -14,7 +14,7 @@ from ..schemas.propuesta import Propuesta as PropuestaSchema
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
 
 
-@router.post("/listar", response_model=Page[PropuestaSchema])
+@router.get("/listar", response_model=Page[PropuestaSchema])
 def listar_propuestas(
 	body: dict = Body(..., example={
 		"pagina": 1,
