@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
-from ..utils.csv_loader2 import process_csv_data_v2
+from ..utils import process_csv_data
 from ..database import SessionLocal
 
 router = APIRouter()
@@ -19,7 +19,7 @@ class PropuestaPayload:
         self.fecha = fecha
         self.carteras = carteras or []
 
-@router.post("/procesar-csv", summary="Procesa conciliación desde CSV", tags=["Conciliación"])
+@router.post("/procesar-csv", summary="Procesa conciliación desde CSV", tags=["CSV Loader"])
 async def procesar_csv_endpoint(
     body: dict = Body(
         ...,
@@ -64,7 +64,7 @@ async def procesar_csv_endpoint(
     }
     """
     try:
-        resultado = process_csv_data_v2(db, body)
+        resultado = process_csv_data(db, body)
         return resultado
     except HTTPException as e:
         raise e

@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .maininit import seed_defaults
 from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambio, conciliacion, propuesta, programa, solicitud, log
-from .routers import csv_loader2
+from .routers import csv_loader
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,17 +30,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(usuario_router.router)
-app.include_router(cartera.router)
-app.include_router(oportunidad.router)
-app.include_router(tipo_cambio.router)
-app.include_router(conciliacion.router)
-app.include_router(propuesta.router)
-app.include_router(programa.router)
-app.include_router(solicitud.router)
-app.include_router(log.router)
+# app.include_router(usuario_router.router)
+# app.include_router(cartera.router)
+# app.include_router(oportunidad.router)
+# app.include_router(tipo_cambio.router)
+# app.include_router(conciliacion.router)
+# app.include_router(propuesta.router)
+# app.include_router(programa.router)
+# app.include_router(solicitud.router)
+# app.include_router(log.router)
 # app.include_router(rol_router.router)
-app.include_router(csv_loader2.router, tags=["CSV Loader2"])
+app.include_router(csv_loader.router, tags=["CSV Loader"])
 # app.include_router(roles_usuarios_carteras.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
