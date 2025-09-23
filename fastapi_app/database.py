@@ -1,6 +1,8 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+import pymysql
+import logging
 
 DATABASE_URL = "mysql+pymysql://admin:5QeWOnjYCvEA2lOtkCfc@conciliaciondb.ci1gweq8a0j0.us-east-1.rds.amazonaws.com:3306/conciliacion"
 

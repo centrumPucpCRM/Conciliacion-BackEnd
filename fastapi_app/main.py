@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .maininit import seed_defaults
+from fastapi_pagination import add_pagination
 from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambio, conciliacion, propuesta, programa, solicitud, log
 from .routers import csv_loader
 
@@ -40,7 +41,7 @@ app.add_middleware(
 )
 
 # app.include_router(usuario_router.router)
-# app.include_router(cartera.router)
+app.include_router(cartera.router)
 # app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
 # app.include_router(conciliacion.router)
@@ -54,4 +55,7 @@ app.include_router(csv_loader.router, tags=["CSV Loader"])
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
 # app.include_router(daf_programa_router)
+
+# Habilitar fastapi-pagination en la app
+add_pagination(app)
 
