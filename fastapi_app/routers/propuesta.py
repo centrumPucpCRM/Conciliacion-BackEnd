@@ -25,7 +25,7 @@ def listar_propuestas(
 	}),
 	db: Session = Depends(get_db)
 ):
-	pagina = body.get("pagina", 1) - 1
+	pagina = body.get("pagina", 1)
 	elementos_por_pagina = body.get("elementosPorPagina", 10)
 	fecha_minima = body.get("fechaMinima")
 	fecha_maxima = body.get("fechaMaxima")
@@ -44,5 +44,5 @@ def listar_propuestas(
 	# paginación manual (offset/limit)
 	total = query.count()
 	items = query.offset((pagina) * elementos_por_pagina).limit(elementos_por_pagina).all()
-	return Page.create(items, total=total, params=Params(page=pagina, size=elementos_por_pagina))
+	return Page.create(items, total=total, params=Params(page=pagina+1, size=elementos_por_pagina))
     
