@@ -32,7 +32,7 @@ app.add_middleware(
 )
 
 # app.include_router(usuario_router.router)
-# app.include_router(cartera.router)
+app.include_router(cartera.router)
 # app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
 # app.include_router(conciliacion.router)
