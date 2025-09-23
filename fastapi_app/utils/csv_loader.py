@@ -366,13 +366,10 @@ def cargar_datos_base(db, data):
     return df, usuarios_dict, propuesta_unica
 # Helper function for CSV loading
 def cargar_csv(data):
-    csv_url = data.get("csv_url") if isinstance(data, dict) else None
-    if not csv_url:
-        raise HTTPException(status_code=400, detail="No se proporcionó 'csv_url' para procesar el archivo de conciliación")
-    try:
-        df = pd.read_csv(csv_url, decimal=',')
-    except Exception as csv_error:
-        raise HTTPException(status_code=400, detail=f"No se pudo leer el CSV desde la URL proporcionada: {csv_error}")
+    fecha = data.get("fechaDatos")
+    hora = data.get("horaDatos")
+    csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "_" + hora + ".csv"
+    df = pd.read_csv(csv_url, decimal=',')
     if df is None or df.empty:
         raise HTTPException(status_code=400, detail="El archivo CSV no contiene registros para procesar")
     df = df.copy()

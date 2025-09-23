@@ -45,7 +45,8 @@ async def procesar_csv_endpoint(
                     "MADEN"
                 ]
             },
-            "csv_url": "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_2025-06-16+2PM.csv"
+            "fechaDatos": "2025-06-16",
+            "horaDatos": "12PM"
         },
         description="JSON con los datos de la propuesta y la URL pública del archivo CSV a procesar"
     ),
@@ -60,7 +61,8 @@ async def procesar_csv_endpoint(
         "fecha": "2025-09-22",
         "carteras": ["Cartera 1", "Cartera 2"]
       },
-      "csv_url": "https://ejemplo.com/archivo.csv"
+            "fechaDatos": "2025-06-16",
+            "horaDatos": "12PM"
     }
     """
     try:

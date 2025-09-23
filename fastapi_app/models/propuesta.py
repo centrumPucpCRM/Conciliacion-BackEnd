@@ -21,6 +21,7 @@ class Propuesta(Base):
     tipoDePropuesta_id = Column(Integer, ForeignKey('tipo_de_propuesta.id'))
     estadoPropuesta_id = Column(Integer, ForeignKey('estado_propuesta.id'))
     creadoEn = Column(Date)
+    fechaPropuesta = Column(Date)
     tipoDePropuesta = relationship('TipoDePropuesta')
     estadoPropuesta = relationship('EstadoPropuesta')
     carteras = relationship('Cartera', secondary=propuesta_cartera, back_populates='propuestas')

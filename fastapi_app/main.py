@@ -35,7 +35,7 @@ app.add_middleware(
 # app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
 # app.include_router(conciliacion.router)
-# app.include_router(propuesta.router)
+app.include_router(propuesta.router)
 # app.include_router(programa.router)
 # app.include_router(solicitud.router)
 # app.include_router(log.router)
