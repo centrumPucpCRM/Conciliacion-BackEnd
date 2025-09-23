@@ -1,27 +1,27 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, CheckConstraint
-from sqlalchemy.orm import validates
-from ..database import Base
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum
+from sqlalchemy.orm import relationship
+from fastapi_app.database import Base
+from .associations import propuesta_cartera
 
-# Definimos las listas de valores permitidos
-TIPO_PROPUESTA_VALORES = ["CREACION", "MODIFICACION", "OTRO", "NUEVO_VALOR"]
-ESTADO_PROPUESTA_VALORES = ["GENERADA", "CANCELADO", "PRECONCILIADA", "APROBACION", "CONCILIADA", "PROGRAMADA"]
+class TipoDePropuesta(Base):
+    __tablename__ = 'tipo_de_propuesta'
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255), unique=True)
+
+class EstadoPropuesta(Base):
+    __tablename__ = 'estado_propuesta'
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(255), unique=True)
 
 class Propuesta(Base):
-    __tablename__ = "propuesta"
-    id_propuesta = Column(Integer, primary_key=True, index=True)
-    id_conciliacion = Column(Integer, ForeignKey("conciliacion.id_conciliacion"), nullable=True)
-    nombre = Column(String(200), nullable=False)
-    descripcion = Column(String(800), nullable=True)
-    tipo_propuesta = Column(String(50), nullable=False)
-    estado_propuesta = Column(String(50), nullable=False)
-    creado_en = Column(DateTime)
-    
-    @validates('tipo_propuesta')
-    def validate_tipo_propuesta(self, key, value):
-        assert value in TIPO_PROPUESTA_VALORES, f"Valor inválido: {value}. Valores permitidos: {TIPO_PROPUESTA_VALORES}"
-        return value
-        
-    @validates('estado_propuesta')
-    def validate_estado_propuesta(self, key, value):
-        assert value in ESTADO_PROPUESTA_VALORES, f"Valor inválido: {value}. Valores permitidos: {ESTADO_PROPUESTA_VALORES}"
-        return value
+    __tablename__ = 'propuesta'
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String(255), nullable=False)
+    descripcion = Column(String(255))
+    tipoDePropuesta_id = Column(Integer, ForeignKey('tipo_de_propuesta.id'))
+    estadoPropuesta_id = Column(Integer, ForeignKey('estado_propuesta.id'))
+    creadoEn = Column(Date)
+    fechaPropuesta = Column(Date)
+    tipoDePropuesta = relationship('TipoDePropuesta')
+    estadoPropuesta = relationship('EstadoPropuesta')
+    carteras = relationship('Cartera', secondary=propuesta_cartera, back_populates='propuestas')

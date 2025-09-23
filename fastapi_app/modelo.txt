@@ -1,0 +1,124 @@
+Rol (Relacion many to many con Permiso), (Relacion many to many con Usuario)
+-------
+id (int)
+nombre (string)
+===================
+Permiso (Relacion many to many con Rol), (Relacion many to many con Usuario)
+-------
+id (int)
+descripcion (string)
+===================
+usuario (Relacion many to many con Rol), (Relacion many to many con Permiso) (relacion many to many con cartera)
+-------
+id (int)
+nombre (string)
+correo (string)
+clave (string)
+activo (bool)
+===================
+cartera (relacion many to many con usuario)
+-------
+id (int)
+nombre (string)
+===================
+Solicitud
+-------
+id (int)
+idUsuarioReceptor (int)
+idUsuarioGenerador (int)
+abierta (bool)
+tipoSolicitud (LOV : EXCLUSION_PROGRAMA,ELIMINACION_BECADO,EDICION_ALUMNO,AGREGAR_ALUMNO,APROBACION_JP,APROBACION_COMERCIAL,APROBACION_DAF)
+valorSolicitud (LOV: ACEPTADO,REACHAZADO,PENDIENTE)
+Comentario (String)
+CreadoEn (DateTime)
+===================
+Log
+-------
+id (int)
+idSolicitud (int)
+Auditoria (json)
+tipoSolicitud (LOV : EXCLUSION_PROGRAMA,ELIMINACION_BECADO,EDICION_ALUMNO,AGREGAR_ALUMNO,APROBACION_JP,APROBACION_COMERCIAL,APROBACION_DAF)
+CreadoEn: (DateTime)
+===================
+Propuesta
+-------
+id (int)
+nombre (string)
+descripcion (string)
+tipoDePropuesta (LOV : CREACION,MODIFICACION)
+estadoPropuesta (LOV : PROGRAMADA,GENERADA,PRECONCILIADA,APROBADA,CONCILIADA,CANCELADA)
+creadoEn (Date)
+===================
+Solicitud x Oportunidad
+-------
+id (int)
+idOportunidad (int)
+idSolicitud (int)
+montoPropuesto (float)
+montoObjetado (float)
+===================
+Solicitud x Programa
+-------
+id (int)
+idPrograma (int)
+IdSolicitud (int)
+fechaInaguracionPropuesta(Date)
+fechaInaguracionObjetada(Date)
+===================
+Programa
+-------
+id (int)
+codigo(String)
+nombre (string)
+fechaDeInaguracion (Date)
+moneda (String)
+precioDeLista (float)
+metaDeVenta (int)
+puntoMinimoApertura (int)
+subdireccion (string)
+idPropuesta (int)
+idJefeProducto (int)(usuario)
+idTipoCambio (int)
+fechaInaguracionPropuesta (date)
+===================
+Oportunidad
+-------
+id (int)
+nombre (string)
+documentoIdentidad (string)
+correo (string)
+telefono (int)
+etapaDeVentas (string)
+descuento (float)
+monto (float)
+becado (bool)
+partyNumber (int)
+conciliado (bool)
+posibleAtipico (bool)
+idPropuesta (int)
+idPrograma (int)
+idTipoCambio (int)
+montoPropuesto (float)
+etapaVentaPropuesta (String)
+eliminado (bool)
+===================
+TipoCambio
+-------
+id (int)
+monedaInput (string)
+monedaTarget (string)
+equivalencia (float)
+fechaTipoCambio (date)
+===================
+ConciliacionPrograma
+-------
+id
+idConcilaicion (FK)
+idPrograma(FK)
+pxqProyectado (float)
+===================
+Conciliacion
+-------
+id (int)
+fechaConciliacion (date)
+estadoConcilaciion (LOV: GENERADA,CANCELADA,FINALIZADA)
