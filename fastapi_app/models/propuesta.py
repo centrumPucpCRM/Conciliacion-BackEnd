@@ -1,17 +1,7 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Enum, CheckConstraint
-from sqlalchemy.orm import validates
-from ..database import Base
-
-from sqlalchemy import Column, Integer, String, Date, ForeignKey
-from sqlalchemy.orm import relationship
-from ..database import Base
-
-
-
-from sqlalchemy import Column, Integer, String, Date, Enum
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Enum
 from sqlalchemy.orm import relationship
 from fastapi_app.database import Base
-import enum
+from .associations import propuesta_cartera
 
 class TipoDePropuesta(Base):
     __tablename__ = 'tipo_de_propuesta'
@@ -33,3 +23,4 @@ class Propuesta(Base):
     creadoEn = Column(Date)
     tipoDePropuesta = relationship('TipoDePropuesta')
     estadoPropuesta = relationship('EstadoPropuesta')
+    carteras = relationship('Cartera', secondary=propuesta_cartera, back_populates='propuestas')

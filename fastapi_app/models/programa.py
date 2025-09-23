@@ -13,7 +13,7 @@ class Programa(Base):
     fechaDeInaguracion = Column(Date)
     moneda = Column(String(255))
     precioDeLista = Column(Float)
-    metaDeVenta = Column(Integer)
+    metaDeVenta = Column(Float)
     puntoMinimoApertura = Column(Integer)
     subdireccion = Column(String(255))
     idPropuesta = Column(Integer, ForeignKey('propuesta.id'))

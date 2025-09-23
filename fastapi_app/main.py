@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .maininit import seed_defaults
 from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambio, conciliacion, propuesta, programa, solicitud, log
+from .routers import csv_loader2
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,7 +40,7 @@ app.include_router(programa.router)
 app.include_router(solicitud.router)
 app.include_router(log.router)
 # app.include_router(rol_router.router)
-# app.include_router(csv_upload.router, tags=["CSV Upload"])
+app.include_router(csv_loader2.router, tags=["CSV Loader2"])
 # app.include_router(roles_usuarios_carteras.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)

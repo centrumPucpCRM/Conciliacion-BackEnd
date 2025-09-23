@@ -8,7 +8,7 @@ class Oportunidad(Base):
     nombre = Column(String(255))
     documentoIdentidad = Column(String(255))
     correo = Column(String(255))
-    telefono = Column(Integer)
+    telefono = Column(String(50))
     etapaDeVentas = Column(String(255))
     descuento = Column(Float)
     monto = Column(Float)
