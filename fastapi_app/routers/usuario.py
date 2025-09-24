@@ -24,12 +24,10 @@ def login_usuario(
                 if hasattr(p, "descripcion"):
                     role_perms.add(p.descripcion)
         permisos = list(direct_perms | role_perms)
-        carteras = [c.nombre for c in getattr(user, "carteras", []) if hasattr(c, "nombre")]
         return {
             "usuario": {
                 "idUsuario": user.id,
-                "permisos": permisos,
-                "carteras": carteras
+                "permisos": permisos
             }
         }
     raise HTTPException(status_code=401, detail="Credenciales inválidas")
