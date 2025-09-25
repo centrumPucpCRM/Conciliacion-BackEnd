@@ -103,7 +103,8 @@ def cargar_propuesta(db, data):
         descripcion="Propuesta generada automáticamente desde archivo CSV",
         tipoDePropuesta=tipo_obj,
         estadoPropuesta=estado_obj,
-        creadoEn=now
+        creadoEn=now,
+        fechaPropuesta=data.get("fechaDatos")
     )
     # Assign carteras as model instances
     cartera_names = propuesta_info.get("carteras", [])
