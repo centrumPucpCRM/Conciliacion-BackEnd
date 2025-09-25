@@ -48,19 +48,32 @@ def listar_solicitudes(db: Session = Depends(get_db)):
 			programa=programa
 		))
 	return resultado
-@router.get("/listar/solicitudes-de-usuario", response_model=List[SolicitudOut])
+from fastapi import Response
+from fastapi_app.schemas.solicitud import SolicitudOut
+
+@router.get("/listar/solicitudes-de-usuario")
 def listar_solicitudes_filtrado(
 	id_usuario: int = Query(..., description="ID del usuario (generador o receptor)"),
 	id_propuesta: int = Query(..., description="ID de la propuesta"),
 	db: Session = Depends(get_db)
 ):
-	if(id_usuario==1):
+
+	# Si el usuario es 1, cambiar a 2
+	if id_usuario == 1:
 		id_usuario = 2
+
+	tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
+	tipo_programa = "EXCLUSION_PROGRAMA"
+
 	solicitudes = db.query(SolicitudModel).filter(
 		((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
 		SolicitudModel.idPropuesta == id_propuesta
 	).all()
-	resultado = []
+
+	solicitudesPropuestaOportunidad = []
+	solicitudesPropuestaPrograma = []
+	solicitudesGenerales = []
+
 	for s in solicitudes:
 		sxos = db.query(SolicitudXOportunidad).filter_by(idSolicitud=s.id).first()
 		sxps = db.query(SolicitudXPrograma).filter_by(idSolicitud=s.id).first()
@@ -78,7 +91,7 @@ def listar_solicitudes_filtrado(
 				fechaInaguracionPropuesta=sxps.fechaInaguracionPropuesta,
 				fechaInaguracionObjetada=sxps.fechaInaguracionObjetada
 			)
-		resultado.append(SolicitudOut(
+		solicitud_dict = SolicitudOut(
 			id=s.id,
 			idUsuarioReceptor=s.idUsuarioReceptor,
 			idUsuarioGenerador=s.idUsuarioGenerador,
@@ -90,5 +103,17 @@ def listar_solicitudes_filtrado(
 			creadoEn=s.creadoEn,
 			oportunidad=oportunidad,
 			programa=programa
-		))
-	return resultado
+		).dict()
+		tipo = solicitud_dict["tipoSolicitud"]
+		if tipo in tipos_oportunidad:
+			solicitudesPropuestaOportunidad.append(solicitud_dict)
+		elif tipo == tipo_programa:
+			solicitudesPropuestaPrograma.append(solicitud_dict)
+		else:
+			solicitudesGenerales.append(solicitud_dict)
+
+	return {
+		"solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+		"solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
+		"solicitudesGenerales": solicitudesGenerales
+	}
