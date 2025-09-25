@@ -9,6 +9,28 @@ from ..schemas.propuesta import PropuestaListadoPage
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
 
+@router.get("/{propuesta_id}/detalle")
+def obtener_resumen_propuesta(
+    propuesta_id: int,
+    db: Session = Depends(get_db),
+):
+    propuesta = (
+        db.query(Propuesta)
+        .options(load_only(Propuesta.nombre, Propuesta.fechaPropuesta, Propuesta.horaPropuesta))
+        .filter(Propuesta.id == propuesta_id)
+        .first()
+    )
+
+    if not propuesta:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    return {
+        "nombre": propuesta.nombre,
+        "fechaPropuesta": propuesta.fechaPropuesta,
+        "horaPropuesta": propuesta.horaPropuesta,
+    }
+
 
 @router.get("/listar", response_model=PropuestaListadoPage)
 def listar_propuestas(
