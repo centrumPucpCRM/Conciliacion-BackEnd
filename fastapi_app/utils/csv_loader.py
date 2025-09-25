@@ -48,7 +48,7 @@ def cargar_usuarios(db, df, carteras_dict):
             if usuario_nombre not in usuario_carteras_map:
                 usuario_carteras_map[usuario_nombre] = set()
             usuario_carteras_map[usuario_nombre].add(cartera_nombre)
-    rol = db.query(Rol).filter(Rol.nombre == "Administrador").first()
+    rol = db.query(Rol).filter(Rol.nombre == "Comercial - Jefe de producto").first()
     nombres_unicos = list(usuario_carteras_map.keys())
     existentes = db.query(Usuario).filter(Usuario.nombre.in_(nombres_unicos)).all()
     existentes_dict = {u.nombre: u for u in existentes}
@@ -60,6 +60,7 @@ def cargar_usuarios(db, df, carteras_dict):
                 correo=f"{usuario_nombre.lower().replace(' ', '.')}@ejemplo.com",
                 activo=True
             )
+            db.add(usuario)  # Agregar usuario a la sesión antes de roles
             if rol:
                 usuario.roles.append(rol)
             nuevos.append(usuario)
@@ -102,7 +103,8 @@ def cargar_propuesta(db, data):
         descripcion="Propuesta generada automáticamente desde archivo CSV",
         tipoDePropuesta=tipo_obj,
         estadoPropuesta=estado_obj,
-        creadoEn=now
+        creadoEn=now,
+        fechaPropuesta=data.get("fechaDatos")
     )
     # Assign carteras as model instances
     cartera_names = propuesta_info.get("carteras", [])
@@ -360,8 +362,11 @@ def crear_solicitudes_Jp(db, df, propuesta_unica):
 # Agrupa la carga de CSV, carteras, usuarios y propuesta
 def cargar_datos_base(db, data):
     df = cargar_csv(data)
+    db.commit()
     carteras_dict = cargar_carteras(db, df)
+    db.commit()
     usuarios_dict = cargar_usuarios(db, df, carteras_dict)
+    db.commit()
     propuesta_unica = cargar_propuesta(db, data)
     return df, usuarios_dict, propuesta_unica
 # Helper function for CSV loading
