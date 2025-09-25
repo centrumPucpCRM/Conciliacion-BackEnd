@@ -104,7 +104,8 @@ def cargar_propuesta(db, data):
         tipoDePropuesta=tipo_obj,
         estadoPropuesta=estado_obj,
         creadoEn=now,
-        fechaPropuesta=data.get("fechaDatos")
+        fechaPropuesta=data.get("fechaDatos"),
+        horaPropuesta=data.get("horaDatos")
     )
     # Assign carteras as model instances
     cartera_names = propuesta_info.get("carteras", [])
