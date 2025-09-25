@@ -1,3 +1,7 @@
+from typing import List
+from fastapi_app.models.usuario import Usuario
+from fastapi_app.schemas.usuario import Usuario as UsuarioSchema
+
 
 from fastapi import APIRouter, Body, HTTPException, Depends
 from sqlalchemy.orm import Session
@@ -31,3 +35,20 @@ def login_usuario(
             }
         }
     raise HTTPException(status_code=401, detail="Credenciales inválidas")
+
+
+@router.get("/listar", response_model=List[dict])
+def listar_usuarios(db: Session = Depends(get_db)):
+    usuarios = db.query(Usuario).all()
+    resultado = []
+    for u in usuarios:
+        carteras = [c.nombre for c in getattr(u, "carteras", []) if hasattr(c, "nombre")]
+        roles = [r.nombre for r in getattr(u, "roles", []) if hasattr(r, "nombre")]
+        resultado.append({
+            "id": u.id,
+            "nombre": u.nombre,
+            "correo": u.correo,
+            "carteras": carteras,
+            "roles": roles
+        })
+    return resultado
