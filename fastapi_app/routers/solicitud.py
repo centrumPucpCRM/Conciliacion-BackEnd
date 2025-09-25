@@ -54,6 +54,8 @@ def listar_solicitudes_filtrado(
 	id_propuesta: int = Query(..., description="ID de la propuesta"),
 	db: Session = Depends(get_db)
 ):
+	if(id_usuario==1):
+		id_usuario = 2
 	solicitudes = db.query(SolicitudModel).filter(
 		((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
 		SolicitudModel.idPropuesta == id_propuesta

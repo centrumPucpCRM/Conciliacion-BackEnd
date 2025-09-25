@@ -6,6 +6,7 @@ from ..database import get_db
 from ..models.propuesta import Propuesta
 from ..models.cartera import Cartera
 from ..schemas.propuesta import PropuestaListadoPage
+from datetime import datetime
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
 
@@ -36,16 +37,30 @@ def obtener_resumen_propuesta(
 def listar_propuestas(
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1),
+    fechaDesde: str = Query(None, description="Fecha desde (YYYY-MM-DD)", alias="fechaDesde"),
+    fechaHasta: str = Query(None, description="Fecha hasta (YYYY-MM-DD)", alias="fechaHasta"),
     db: Session = Depends(get_db),
 ):
     # Query base con carga de relaciones necesarias
-    base_query = (
-        db.query(Propuesta)
-        .options(
-            selectinload(Propuesta.estadoPropuesta),
-            selectinload(Propuesta.carteras).load_only(Cartera.nombre),
-        )
+
+    base_query = db.query(Propuesta).options(
+        selectinload(Propuesta.estadoPropuesta),
+        selectinload(Propuesta.carteras).load_only(Cartera.nombre),
     )
+
+    # Filtrado por fechas
+    if fechaDesde:
+        try:
+            fecha_desde_dt = datetime.strptime(fechaDesde, "%Y-%m-%d")
+            base_query = base_query.filter(Propuesta.fechaPropuesta >= fecha_desde_dt)
+        except Exception:
+            pass
+    if fechaHasta:
+        try:
+            fecha_hasta_dt = datetime.strptime(fechaHasta, "%Y-%m-%d")
+            base_query = base_query.filter(Propuesta.fechaPropuesta <= fecha_hasta_dt)
+        except Exception:
+            pass
 
     total = base_query.count()
     offset = (page - 1) * size
