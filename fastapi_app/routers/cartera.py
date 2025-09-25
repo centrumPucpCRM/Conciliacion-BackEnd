@@ -17,7 +17,7 @@ def listar_carteras(db: Session = Depends(get_db)):
     items = [{"id": r.id, "cartera": r.nombre} for r in rows]
     return {"items": items}
 
-
+#TODO: Eliminar el user_id cuando se implemente el token
 @router.get("/listar/{user_id}")
 def listar_carteras_por_usuario(user_id: int, db: Session = Depends(get_db)):
     """
