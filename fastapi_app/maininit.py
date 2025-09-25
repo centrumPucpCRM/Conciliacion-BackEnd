@@ -222,6 +222,8 @@ def crear_usuarios_predeterminados():
         db.close()
 
 def crearPermisosPredeterminados():
+    #Los permisos que se insertaran a la bbd tienen que seguir la siguiente estructura
+    # Elemento -  Accion - Pantalla
     permisos = [
         "BotonVerGeneracion",
         "BotonVerPreConciliacion",
@@ -230,11 +232,9 @@ def crearPermisosPredeterminados():
         "BotonVerCancelacion",
         "BotonVerProgramacion",
         "BotonVerPuedeCancelarTodo",
-        "TablaGeneracionEditar",
-        "TablaPreConciliacionEditar",
-        "BotonAgregarAlumnoPreConciliacion",
-        "DisplayVerTodosRoles",
-        "DisplayVerRolesSubComerciales",
+        "TablaEditarGeneracion",
+        "TablaEditarPreConciliacion",
+        "BotonAgregarAlumnoPreConciliacion"
     ]
     db: Session = SessionLocal()
     try:
@@ -250,6 +250,7 @@ def crearPermisosPredeterminados():
         db.close()
 def crearRoles_x_PermisosPredeterminados():
     permisos_rol = {
+        
         "Administrador": {
             "BotonVerGeneracion",
             "BotonVerPreConciliacion",
@@ -258,38 +259,35 @@ def crearRoles_x_PermisosPredeterminados():
             "BotonVerCancelacion",
             "BotonVerProgramacion",
             "BotonVerPuedeCancelarTodo",
-            "TablaGeneracionEditar",
-            "TablaPreConciliacionEditar",
+            "TablaEditarGeneracion",
+            "TablaEditarPreConciliacion",
             "BotonAgregarAlumnoPreConciliacion",
-            "DisplayVerTodosRoles",
-            "DisplayVerRolesSubComerciales",
         },
         "Comercial - Jefe de producto": {
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",
             "BotonVerConciliacion",
-            "TablaPreConciliacionEditar",
+            "TablaEditarPreConciliacion",
             "BotonAgregarAlumnoPreConciliacion",
         },
         "Comercial - Subdirector": {
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",
             "BotonVerConciliacion",
-            "DisplayVerRolesSubComerciales",
         },
         "DAF - Subdirector": {
             "BotonVerGeneracion",
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",
             "BotonVerConciliacion",
-            "TablaGeneracionEditar",
+            "TablaEditarGeneracion",
         },
         "DAF - Supervisor": {
             "BotonVerGeneracion",
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",
             "BotonVerConciliacion",
-            "TablaGeneracionEditar",
+            "TablaEditarGeneracion",
         },
     }
 
