@@ -6,6 +6,7 @@ from .maininit import seed_defaults
 from fastapi_pagination import add_pagination
 from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambio, conciliacion, propuesta, programa, solicitud, log
 from .routers import csv_loader
+from .routers import dashboard
 
 
 # Configura logging para mostrar en consola
@@ -52,6 +53,7 @@ app.include_router(solicitud.router)
 from .routers import rol as rol_router
 app.include_router(rol_router.router)
 app.include_router(csv_loader.router, tags=["CSV Loader"])
+app.include_router(dashboard.router)
 # app.include_router(roles_usuarios_carteras.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
