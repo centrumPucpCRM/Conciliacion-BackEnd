@@ -225,6 +225,7 @@ def crearPermisosPredeterminados():
     #Los permisos que se insertaran a la bbd tienen que seguir la siguiente estructura
     # Elemento -  Accion - Pantalla
     permisos = [
+        "BotonCrearPropuesta",
         "BotonVerGeneracion",
         "BotonVerPreConciliacion",
         "BotonVerAprobacion",
@@ -276,6 +277,7 @@ def crearRoles_x_PermisosPredeterminados():
             "BotonVerConciliacion",
         },
         "DAF - Subdirector": {
+            "BotonCrearPropuesta",
             "BotonVerGeneracion",
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",
@@ -283,6 +285,7 @@ def crearRoles_x_PermisosPredeterminados():
             "TablaEditarGeneracion",
         },
         "DAF - Supervisor": {
+            "BotonCrearPropuesta",
             "BotonVerGeneracion",
             "BotonVerPreConciliacion",
             "BotonVerAprobacion",

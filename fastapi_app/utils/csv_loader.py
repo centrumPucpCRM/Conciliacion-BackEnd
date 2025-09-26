@@ -41,43 +41,57 @@ def cargar_carteras(db, df):
 def cargar_usuarios(db, df, carteras_dict):
     usuarios_dict = {}
     usuario_carteras_map = {}
+
+    # Construir mapa usuario -> set(carteras) tal cual viene en el CSV
     for _, row in df.iterrows():
-        if pd.notna(row.get('usuario.nombre')) and pd.notna(row.get('cartera.nombre')):
-            usuario_nombre = row['usuario.nombre'].strip()
-            cartera_nombre = row['cartera.nombre'].strip()
-            if usuario_nombre not in usuario_carteras_map:
-                usuario_carteras_map[usuario_nombre] = set()
-            usuario_carteras_map[usuario_nombre].add(cartera_nombre)
+        u = row.get('usuario.nombre')
+        c = row.get('cartera.nombre')
+        if pd.notna(u) and pd.notna(c):
+            usuario_carteras_map.setdefault(str(u), set()).add(str(c))
+
+    if not usuario_carteras_map:
+        return {}
+
+    # Rol opcional
     rol = db.query(Rol).filter(Rol.nombre == "Comercial - Jefe de producto").first()
-    nombres_unicos = list(usuario_carteras_map.keys())
-    existentes = db.query(Usuario).filter(Usuario.nombre.in_(nombres_unicos)).all()
-    existentes_dict = {u.nombre: u for u in existentes}
+
+    # Traer existentes exactamente por nombre
+    nombres = list(usuario_carteras_map.keys())
+    existentes = db.query(Usuario).filter(Usuario.nombre.in_(nombres)).all()
+    existentes_dict = {str(u.nombre): u for u in existentes}
+
+    # Crear faltantes y/o usar existentes
     nuevos = []
-    for usuario_nombre in nombres_unicos:
-        if usuario_nombre not in existentes_dict:
-            usuario = Usuario(
-                nombre=usuario_nombre,
-                correo=f"{usuario_nombre.lower().replace(' ', '.')}@ejemplo.com",
+    for un in nombres:
+        u = existentes_dict.get(un)
+        if not u:
+            u = Usuario(
+                nombre=un,
+                correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
                 activo=True
             )
-            db.add(usuario)  # Agregar usuario a la sesión antes de roles
-            if rol:
-                usuario.roles.append(rol)
-            nuevos.append(usuario)
-            usuarios_dict[usuario_nombre] = usuario
-        else:
-            usuarios_dict[usuario_nombre] = existentes_dict[usuario_nombre]
-    if nuevos:
-        db.bulk_save_objects(nuevos)
-        db.flush()
-    # Asignar carteras a usuarios
-    for usuario_nombre, cartera_nombres in usuario_carteras_map.items():
-        usuario = usuarios_dict[usuario_nombre]
-        for cartera_nombre in cartera_nombres:
-            cartera = carteras_dict.get(cartera_nombre)
-            if cartera and cartera not in usuario.carteras:
+            db.add(u)
+            nuevos.append(u)
+        if rol and rol not in u.roles:
+            u.roles.append(rol)
+        usuarios_dict[un] = u
+
+    # Asegurar IDs antes de relaciones
+    db.flush()
+
+    # Asignar carteras evitando duplicados
+    for un, carteras in usuario_carteras_map.items():
+        usuario = usuarios_dict[un]
+        actuales = {c.nombre for c in usuario.carteras}
+        for cn in carteras:
+            cartera = carteras_dict.get(cn)  # búsqueda exacta
+            if cartera and cartera.nombre not in actuales:
                 usuario.carteras.append(cartera)
+                actuales.add(cartera.nombre)
+
     return usuarios_dict
+
+
 
 def cargar_propuesta(db, data):
     now = datetime.datetime.now()
