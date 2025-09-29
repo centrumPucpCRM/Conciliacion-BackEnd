@@ -44,26 +44,13 @@ async def procesar_csv_endpoint(
                     "MADEN"
                 ]
             },
-            "fechaDatos": "2025-06-16",
+            "fechaDatos": "2025-09-16",
             "horaDatos": "11AM"
         },
         description="JSON con los datos de la propuesta y la URL pública del archivo CSV a procesar"
     ),
     db: Session = Depends(get_db)
 ):
-    """
-    Procesa conciliación desde un archivo CSV remoto. El archivo debe tener las columnas esperadas.
-    Ejemplo de uso en Swagger:
-    {
-      "propuesta": {
-        "nombre": "nombrePropuesta",
-        "fecha": "2025-09-22",
-        "carteras": ["Cartera 1", "Cartera 2"]
-      },
-            "fechaDatos": "2025-06-16",
-            "horaDatos": "12PM"
-    }
-    """
     try:
         resultado = process_csv_data(db, body)
         return resultado

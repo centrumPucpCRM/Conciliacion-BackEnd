@@ -1,6 +1,8 @@
 
 import pandas as pd
 import datetime
+import math
+
 from typing import Dict, Any
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
@@ -143,7 +145,6 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
     fecha_propuesta = propuesta_unica.creadoEn.date() if hasattr(propuesta_unica.creadoEn, 'date') else propuesta_unica.creadoEn
     tipos_cambio = db.query(TipoCambio).filter(TipoCambio.fecha_tipo_cambio == fecha_propuesta).all()
     tipos_cambio_dict = {tc.moneda_origen: tc for tc in tipos_cambio}
-
     # Agrupa por programa.codigo y toma la primera fila de cada grupo
     df_programas = df.dropna(subset=['programa.codigo'])
     grouped = df_programas.groupby(df_programas['programa.codigo'].astype(str).str.strip())
@@ -154,7 +155,6 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         moneda = str(row.get('programa.moneda', 'PEN')).strip()
         subdireccion = str(row.get('programa.subdireccion', '')) if row.get('programa.subdireccion', None) is not None else None
         usuario_nombre = str(row.get('usuario.nombre', '')).strip()
-
         programa = Programa(
             codigo=programa_codigo,
             nombre=programa_nombre,
@@ -174,10 +174,13 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
     if programas_bulk:
         db.bulk_save_objects(programas_bulk)
         db.flush()
+        db.commit()
+    programas = db.query(Programa).filter(Programa.idPropuesta == propuesta_unica.id).all()
+    for programa in programas:
+        programas_dict[programa.codigo] = programa
     return programas_dict
 
 def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
-    import math
     # Cargar solo los tipos de cambio cuya fecha_tipo_cambio coincide con la fecha de creación de la propuesta
     fecha_propuesta = propuesta_unica.creadoEn.date() if hasattr(propuesta_unica.creadoEn, 'date') else propuesta_unica.creadoEn
     tipos_cambio = db.query(TipoCambio).filter(TipoCambio.fecha_tipo_cambio == fecha_propuesta).all()
@@ -250,6 +253,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 partyNumber = sanitize_int(row.get('oportunidad.party_number', 0))
                 conciliado = sanitize_bool(row.get('oportunidad.conciliado', False))
                 posibleAtipico = bool(row.get('oportunidad.posibleAtipico', False))
+                idPrograma = programas_dict.get(programa_codigo).id if programa_codigo in programas_dict else None
                 oportunidad = Oportunidad(
                     nombre=oportunidad_nombre,
                     documentoIdentidad=documentoIdentidad,
@@ -262,7 +266,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     partyNumber=partyNumber,
                     conciliado=conciliado,
                     idPropuesta=propuesta_id,
-                    idPrograma=programas_dict.get(programa_codigo).id if programa_codigo in programas_dict else None,
+                    idPrograma=idPrograma,
                     idTipoCambio=id_tipo_cambio,
                     montoPropuesto=monto,
                     etapaVentaPropuesta=etapaDeVentas,
@@ -270,9 +274,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad
-            # Print cada 1000 filas para monitorear avance
         except Exception as e:
-            return
             print(f"[ERROR] Oportunidad fila {idx}: {e}\nDatos: {row.to_dict()}")
             db.rollback()
     if oportunidades_bulk:
@@ -280,7 +282,6 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
             db.bulk_save_objects(oportunidades_bulk)
             db.commit()
         except Exception as e:
-            return
             print(f"[ERROR] Bulk insert final: {e}")
             db.rollback()
     return oportunidades_dict
@@ -446,6 +447,7 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         programas_dict = cargar_programas(db, df, propuesta_unica, usuarios_dict)
         timings['cargar_programas'] = time.time() - start
         print(f"Tiempo cargar_programas: {timings['cargar_programas']:.4f} segundos")
+        db.commit()  # Commit solo para guardar programas
 
         # 4. Cargar oportunidades
         start = time.time()

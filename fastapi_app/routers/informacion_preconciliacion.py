@@ -1,6 +1,7 @@
 
 from fastapi_app.models.propuesta import Propuesta
 from fastapi_app.models.programa import Programa
+from fastapi_app.models.oportunidad import Oportunidad
 from datetime import datetime, timedelta
 
 
@@ -87,32 +88,34 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session):
     propuesta = db.query(Propuesta).get(id_propuesta)
     if not propuesta or not propuesta.fechaPropuesta:
-        return []
-    # Obtener mes de conciliacion y calcular mes anterior
+        return {"items": [], "totalizadores": {}}
     mes_conciliacion = propuesta.fechaPropuesta
-    # Calcular mes y año del mes anterior
     if mes_conciliacion.month == 1:
         mes_anterior = 12
         anio_anterior = mes_conciliacion.year - 1
     else:
         mes_anterior = mes_conciliacion.month - 1
         anio_anterior = mes_conciliacion.year
-    ids_no_filtrar = {1,2,3,4,5,6}# Usuarios: daf,admin,jefes comerciales
+    ids_no_filtrar = {1,2,3,4,5,6}
     if id_usuario in ids_no_filtrar:
-        programas = db.query(Programa).filter(
-            Programa.fechaDeInaguracion != None
-        ).all()
+        programas = db.query(Programa).filter(Programa.fechaDeInaguracion != None).all()
     else:
-        programas = db.query(Programa).filter(
-            Programa.idJefeProducto == id_usuario,
-            Programa.fechaDeInaguracion != None
-        ).all()
-    programas_filtrados = [
-        p for p in programas
-        if p.fechaDeInaguracion.month == mes_anterior and p.fechaDeInaguracion.year == anio_anterior
-    ]
-    return [
-        {
+        programas = db.query(Programa).filter(Programa.idJefeProducto == id_usuario, Programa.fechaDeInaguracion != None).all()
+    programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes_anterior and p.fechaDeInaguracion.year == anio_anterior]
+    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
+    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    oportunidades_por_programa = {}
+    for o in oportunidades_all:
+        oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
+    items = []
+    total_meta = 0
+    total_monto = 0
+    total_oportunidades = 0
+    for p in programas_filtrados:
+        oportunidades = oportunidades_por_programa.get(p.id, [])
+        monto = sum(o.montoPropuesto or 0 for o in oportunidades)
+        count = len(oportunidades)
+        items.append({
             "id": p.id,
             "nombre": p.nombre,
             "fechaDeInaguracion": p.fechaDeInaguracion,
@@ -121,17 +124,35 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "precioDeLista": p.precioDeLista,
             "metaDeVenta": p.metaDeVenta,
             "puntoMinimoApertura": p.puntoMinimoApertura,
-            "subdireccion": p.subdireccion
-        }
-        for p in programas_filtrados
-    ]
+            "subdireccion": p.subdireccion,
+            "oportunidad_total_monto_propuesto": monto,
+            "oportunidad_total_count": count
+        })
+        total_meta += p.metaDeVenta or 0
+        total_monto += monto
+        total_oportunidades += count
+    totalizadores = {
+        "total_meta_de_venta": total_meta,
+        "total_monto_propuesto": total_monto,
+        "total_oportunidades": total_oportunidades,
+        "size": len(items)
+    }
+    return {"items": items, "totalizadores": totalizadores}
 def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session):
     propuesta = db.query(Propuesta).get(id_propuesta)
     if not propuesta or not propuesta.fechaPropuesta:
-        return {}
+        return {"items": [], "totalizadores": {}}
     mes_conciliacion = propuesta.fechaPropuesta
-    programas_meses = []
+    items = []
+    total_meta = 0
+    total_monto = 0
+    total_oportunidades = 0
     ids_no_filtrar = {1,2,3,4,5,6}
+    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
+    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    oportunidades_por_programa = {}
+    for o in oportunidades_all:
+        oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
     for offset in [2, 3, 4]:
         mes = mes_conciliacion.month - offset
         anio = mes_conciliacion.year
@@ -139,20 +160,15 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
             mes += 12
             anio -= 1
         if id_usuario in ids_no_filtrar:
-            programas = db.query(Programa).filter(
-                Programa.fechaDeInaguracion != None
-            ).all()
+            programas = db.query(Programa).filter(Programa.fechaDeInaguracion != None).all()
         else:
-            programas = db.query(Programa).filter(
-                Programa.idJefeProducto == id_usuario,
-                Programa.fechaDeInaguracion != None
-            ).all()
-        programas_filtrados = [
-            p for p in programas
-            if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio
-        ]
+            programas = db.query(Programa).filter(Programa.idJefeProducto == id_usuario, Programa.fechaDeInaguracion != None).all()
+        programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
         for p in programas_filtrados:
-            programas_meses.append({
+            oportunidades = oportunidades_por_programa.get(p.id, [])
+            monto = sum(o.montoPropuesto or 0 for o in oportunidades)
+            count = len(oportunidades)
+            items.append({
                 "id": p.id,
                 "nombre": p.nombre,
                 "fechaDeInaguracion": p.fechaDeInaguracion,
@@ -161,9 +177,21 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "precioDeLista": p.precioDeLista,
                 "metaDeVenta": p.metaDeVenta,
                 "puntoMinimoApertura": p.puntoMinimoApertura,
-                "subdireccion": p.subdireccion
+                "subdireccion": p.subdireccion,
+                "oportunidad_total_monto_propuesto": monto,
+                "oportunidad_total_count": count
             })
-    return programas_meses
+            total_meta += p.metaDeVenta or 0
+            total_monto += monto
+            total_oportunidades += count
+    totalizadores = {
+        "total_meta_de_venta": total_meta,
+        "total_monto_propuesto": total_monto,
+        "total_oportunidades": total_oportunidades,
+        "size": len(items)
+    }
+    return {"items": items, "totalizadores": totalizadores}
+
 router = APIRouter(prefix="/informacion-preconciliacion", tags=["InformacionPreconciliacion"])
 @router.get("/listar")
 def obtener_informacion_preconciliacion(
