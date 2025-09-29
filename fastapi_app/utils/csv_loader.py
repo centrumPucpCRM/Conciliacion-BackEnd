@@ -306,15 +306,14 @@ def cargar_tipo_cambio(db):
             db.flush()
 
 def crear_solicitudes_subdirectores(db, propuesta_unica):
+    from fastapi_app.models.log import Log
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
-    # Lista de nombres de subdirectores jefes
     subdirector_jefe_nombres = ["Jefe grado", "Jefe ee", "Jefe CentrumX"]
-    # Obtener usuarios por nombre
     usuarios = db.query(Usuario).all()
     usuarios_por_nombre = {u.nombre.strip().lower(): u for u in usuarios}
     solicitudes_bulk = []
-    # Para cada subdirección en el DataFrame
+    logs_bulk = []
     receptor_usuario = usuarios_por_nombre.get('daf.subdirector')
     for jefe_nombre in subdirector_jefe_nombres:
         generador_usuario = usuarios_por_nombre.get(jefe_nombre.strip().lower())
@@ -333,25 +332,44 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
         db.flush()
+        # Refrescar solicitudes_bulk con los ids asignados
+        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
+        for s in solicitudes_db:
+            log_data = {
+                'idSolicitud': s.id,
+                'tipoSolicitud_id': s.tipoSolicitud_id,
+                'creadoEn': datetime.datetime.now(),
+                'auditoria': {
+                    'idUsuarioReceptor': s.idUsuarioReceptor,
+                    'idUsuarioGenerador': s.idUsuarioGenerador,
+                    'idPropuesta': s.idPropuesta,
+                    'comentario': s.comentario,
+                    'abierta': s.abierta,
+                    'valorSolicitud_id': s.valorSolicitud_id
+                }
+            }
+            log = Log(**log_data)
+            logs_bulk.append(log)
+        db.bulk_save_objects(logs_bulk)
+        db.flush()
 
 
 def crear_solicitudes_Jp(db, df, propuesta_unica):
-    # Mapeo explícito de subdirección a nombre de usuario jefe
+    from fastapi_app.models.log import Log
     subdireccion_jefe_map = {
         "Grado": "Jefe grado",
         "Educacion Ejecutiva": "Jefe ee",
         "CentrumX": "Jefe CentrumX"
     }
     usuarios = db.query(Usuario).all()
-    # Crear un dict de usuarios por nombre para acceso rápido
     usuarios_por_nombre = {u.nombre.strip().lower(): u for u in usuarios}
-    # No es necesario crear un dict adicional, se usa el mapeo directamente
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     agrupadores = ['usuario.nombre', 'programa.subdireccion']
     df_grouped = df.dropna(subset=agrupadores)
     combinaciones = df_grouped.groupby(agrupadores).size().reset_index().drop(columns=0)
     solicitudes_bulk = []
+    logs_bulk = []
     for _, row in combinaciones.iterrows():
         usuario_nombre = str(row.get('usuario.nombre', '')).strip().lower()
         subdireccion = str(row.get('programa.subdireccion', '')).strip()
@@ -372,6 +390,26 @@ def crear_solicitudes_Jp(db, df, propuesta_unica):
         solicitudes_bulk.append(nueva_solicitud)
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
+        db.flush()
+        # Refrescar solicitudes_bulk con los ids asignados
+        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
+        for s in solicitudes_db:
+            log_data = {
+                'idSolicitud': s.id,
+                'tipoSolicitud_id': s.tipoSolicitud_id,
+                'creadoEn': datetime.datetime.now(),
+                'auditoria': {
+                    'idUsuarioReceptor': s.idUsuarioReceptor,
+                    'idUsuarioGenerador': s.idUsuarioGenerador,
+                    'idPropuesta': s.idPropuesta,
+                    'comentario': s.comentario,
+                    'abierta': s.abierta,
+                    'valorSolicitud_id': s.valorSolicitud_id
+                }
+            }
+            log = Log(**log_data)
+            logs_bulk.append(log)
+        db.bulk_save_objects(logs_bulk)
         db.flush()
 
 

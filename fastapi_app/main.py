@@ -1,4 +1,5 @@
 import logging
+from .routers import log
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,6 +57,7 @@ app.include_router(rol_router.router)
 app.include_router(csv_loader.router, tags=["CSV Loader"])
 app.include_router(dashboard.router)
 app.include_router(informacion_preconciliacion.router)
+app.include_router(log.router)
 # app.include_router(roles_usuarios_carteras.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
