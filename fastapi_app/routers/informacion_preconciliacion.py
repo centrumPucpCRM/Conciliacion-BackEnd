@@ -15,20 +15,20 @@ from fastapi_app.schemas.solicitud import SolicitudOut, SolicitudOportunidad, So
 from fastapi_app.models.usuario import Usuario
 from fastapi_app.models.cartera import Cartera
 
-def obtener_carteras_usuario(id_usuario: int, db: Session):
-    usuario = db.query(Usuario).get(id_usuario)
-    if not usuario:
-        return []
-    # Si el usuario tiene relación many-to-many con carteras
-    carteras = usuario.carteras if hasattr(usuario, 'carteras') else []
-    return [
-        {
-            "id": c.id,
-            "nombre": c.nombre,
-            "descripcion": getattr(c, "descripcion", None)
-        }
-        for c in carteras
-    ]
+# def obtener_carteras_usuario(id_usuario: int, db: Session):
+#     usuario = db.query(Usuario).get(id_usuario)
+#     if not usuario:
+#         return []
+#     # Si el usuario tiene relación many-to-many con carteras
+#     carteras = usuario.carteras if hasattr(usuario, 'carteras') else []
+#     return [
+#         {
+#             "id": c.id,
+#             "nombre": c.nombre,
+#             "descripcion": getattr(c, "descripcion", None)
+#         }
+#         for c in carteras
+#     ]
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     if id_usuario == 1:
         id_usuario = 2
@@ -200,11 +200,11 @@ def obtener_informacion_preconciliacion(
     db: Session = Depends(get_db)
 ):
     solicitudes = obtener_solicitudes_agrupadas(id_usuario, id_propuesta, db)
-    carteras = obtener_carteras_usuario(id_usuario, db)
+    # carteras = obtener_carteras_usuario(id_usuario, db)
     programas_mes_conciliado = obtener_programas_mes_conciliado(id_usuario, id_propuesta, db)
     programas_meses_anteriores = obtener_programas_meses_anteriores(id_usuario, id_propuesta, db)
     return {
-        "carteras": carteras,
+        # "carteras": carteras,
         "solicitudes": solicitudes,
         "mes_conciliado": programas_mes_conciliado,
         "meses_anteriores": programas_meses_anteriores

@@ -18,7 +18,7 @@ def listar_carteras(db: Session = Depends(get_db)):
     return {"items": items}
 
 #TODO: Eliminar el user_id cuando se implemente el token
-@router.get("/listar/{user_id}")
+@router.get("/listar/usuario")
 def listar_carteras_por_usuario(user_id: int, db: Session = Depends(get_db)):
     """
     Devuelve todas las carteras asociadas a un usuario específico (sin paginación).
