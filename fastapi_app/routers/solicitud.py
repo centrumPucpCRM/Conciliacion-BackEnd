@@ -1,19 +1,64 @@
 from fastapi import Query
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+
 from fastapi_app.database import get_db
 from fastapi_app.models.solicitud import Solicitud as SolicitudModel
 
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
 from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
-from fastapi_app.schemas.solicitud import SolicitudOut, SolicitudOportunidad, SolicitudPrograma
+from fastapi_app.schemas.solicitud import Solicitud, SolicitudOportunidad, SolicitudPrograma
 
-router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
+from fastapi import Body, HTTPException
 
+from sqlalchemy.orm import Session
 from typing import List
 
-@router.get("/listar", response_model=List[SolicitudOut])
+router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
+# Endpoint generico para crear solicitudes de alumno o programa
+@router.post("/crear")
+def crear_solicitud_generica(
+	body: dict = Body(...),
+	db: Session = Depends(get_db)
+):
+	tipo_solicitud = body.get("tipo_solicitud") #OBLIGATORIO
+	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"]:
+		if tipo_solicitud == "AGREGAR_ALUMNO":
+			#  idPropuesta (obtener del programa a que propuesta esta asociado)
+			# "idPrograma", (OBLIGATORIO)
+			# "idOportunidad", (OBLIGATORIO)
+			# "idUsuarioGenerador" (OBLIGATORIO)
+			# "tipoSolicitud_id", " (obtener el id de este "tipo_solicitud	")",
+			# "valorSolicitud_id" (obtener el id de  "ABIERTA")
+			# "idUsuarioReceptor (obtener del idPrograma)"
+			# comentario (OBLIGATORIO)
+			# abierta = True
+			pass
+		elif tipo_solicitud == "EDICION_ALUMNO":
+			#  idPropuesta (obtener del programa a que propuesta esta asociado)
+			# "idPrograma", (OBLIGATORIO)
+			# "idOportunidad", (OBLIGATORIO)
+			# "idUsuarioGenerador" (OBLIGATORIO)
+			# "montoPropuesto", (OBLIGATORIO)
+			# "montoObjetado", (OBLIGATORIO)
+			# "tipoSolicitud_id", " (obtener el id de este "tipo_solicitud")",
+			# "valorSolicitud_id" (obtener el id de  "ABIERTA")
+			# "idUsuarioReceptor (obtener del idPrograma)"
+			# comentario "El monto  propuesto fue editado por el usuario (obtener el nombre del usuario generador) de oporutnidad.monto, oportunidad..monto_propuesto"
+			# abierta = True
+			pass
+		elif tipo_solicitud == "ELIMINACION_BECADO":
+			#Por ahora esto no genera una solicitud
+			pass
+	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
+		if tipo_solicitud == "EXCLUSION_PROGRAMA":
+			pass
+		elif tipo_solicitud == "FECHA_CAMBIADA":
+	return {"message": "Funcionalidad no implementada aún"}
+
+
+
+@router.get("/listar", response_model=List[Solicitud])
 def listar_solicitudes(db: Session = Depends(get_db)):
 	solicitudes = db.query(SolicitudModel).all()
 	resultado = []
@@ -34,7 +79,7 @@ def listar_solicitudes(db: Session = Depends(get_db)):
 				fechaInaguracionPropuesta=sxps.fechaInaguracionPropuesta,
 				fechaInaguracionObjetada=sxps.fechaInaguracionObjetada
 			)
-		resultado.append(SolicitudOut(
+		resultado.append(Solicitud(
 			id=s.id,
 			idUsuarioReceptor=s.idUsuarioReceptor,
 			idUsuarioGenerador=s.idUsuarioGenerador,
@@ -48,6 +93,4 @@ def listar_solicitudes(db: Session = Depends(get_db)):
 			programa=programa
 		))
 	return resultado
-from fastapi import Response
-from fastapi_app.schemas.solicitud import SolicitudOut
 

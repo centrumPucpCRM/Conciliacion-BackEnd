@@ -11,7 +11,7 @@ from fastapi_app.database import get_db
 from fastapi_app.models.solicitud import Solicitud as SolicitudModel
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
 from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
-from fastapi_app.schemas.solicitud import SolicitudOut, SolicitudOportunidad, SolicitudPrograma
+from fastapi_app.schemas.solicitud import Solicitud, SolicitudOportunidad, SolicitudPrograma
 from fastapi_app.models.usuario import Usuario
 from fastapi_app.models.cartera import Cartera
 
@@ -58,7 +58,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
                 fechaInaguracionPropuesta=sxps.fechaInaguracionPropuesta,
                 fechaInaguracionObjetada=sxps.fechaInaguracionObjetada
             )
-        solicitud_dict = SolicitudOut(
+        solicitud_dict = Solicitud(
             id=s.id,
             idUsuarioReceptor=s.idUsuarioReceptor,
             idUsuarioGenerador=s.idUsuarioGenerador,
@@ -85,7 +85,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
     }
 
 
-def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session):
+def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)
     if not propuesta or not propuesta.fechaPropuesta:
         return {"items": [], "totalizadores": {}}
@@ -111,10 +111,34 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     total_meta = 0
     total_monto = 0
     total_oportunidades = 0
+
+    # Obtener ids de alumnos y programas involucrados en solicitudes
+    alumnos_solicitudes = set()
+    programas_solicitudes = set()
+    for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        oportunidad = s.get("oportunidad")
+        if oportunidad and oportunidad.get("idOportunidad"):
+            alumnos_solicitudes.add(oportunidad["idOportunidad"])
+    for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        programa = s.get("programa")
+        if programa and programa.get("idPrograma"):
+            programas_solicitudes.add(programa["idPrograma"])
+
     for p in programas_filtrados:
         oportunidades = oportunidades_por_programa.get(p.id, [])
-        monto = sum(o.montoPropuesto or 0 for o in oportunidades)
-        count = len(oportunidades)
+        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
+        count_opty = len(oportunidades)
+        # Verificar si el programa es atípico
+        atipico = False
+        # Si el programa está en alguna solicitud de programa
+        if p.id in programas_solicitudes:
+            atipico = True
+        # Si alguna oportunidad/alumno del programa está en alguna solicitud de oportunidad
+        else:
+            for o in oportunidades:
+                if o.id in alumnos_solicitudes:
+                    atipico = True
+                    break
         items.append({
             "id": p.id,
             "nombre": p.nombre,
@@ -125,12 +149,15 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "metaDeVenta": p.metaDeVenta,
             "puntoMinimoApertura": p.puntoMinimoApertura,
             "subdireccion": p.subdireccion,
-            "oportunidad_total_monto_propuesto": monto,
-            "oportunidad_total_count": count
+            "oportunidad_total_monto_propuesto": monto_opty,
+            "oportunidad_total_count": count_opty,
+            "atipico": atipico, 
+            "es_aperturado": count_opty > p.puntoMinimoApertura,
+
         })
         total_meta += p.metaDeVenta or 0
-        total_monto += monto
-        total_oportunidades += count
+        total_monto += monto_opty   
+        total_oportunidades += count_opty
     totalizadores = {
         "total_meta_de_venta": total_meta,
         "total_monto_propuesto": total_monto,
@@ -138,7 +165,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         "size": len(items)
     }
     return {"items": items, "totalizadores": totalizadores}
-def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session):
+def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)
     if not propuesta or not propuesta.fechaPropuesta:
         return {"items": [], "totalizadores": {}}
@@ -153,6 +180,19 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     oportunidades_por_programa = {}
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
+
+    # Obtener ids de alumnos y programas involucrados en solicitudes
+    alumnos_solicitudes = set()
+    programas_solicitudes = set()
+    for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        oportunidad = s.get("oportunidad")
+        if oportunidad and oportunidad.get("idOportunidad"):
+            alumnos_solicitudes.add(oportunidad["idOportunidad"])
+    for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        programa = s.get("programa")
+        if programa and programa.get("idPrograma"):
+            programas_solicitudes.add(programa["idPrograma"])
+
     for offset in [2, 3, 4]:
         mes = mes_conciliacion.month - offset
         anio = mes_conciliacion.year
@@ -166,8 +206,17 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
         programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
         for p in programas_filtrados:
             oportunidades = oportunidades_por_programa.get(p.id, [])
-            monto = sum(o.montoPropuesto or 0 for o in oportunidades)
-            count = len(oportunidades)
+            monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
+            count_opty = len(oportunidades)
+            # Verificar si el programa es atípico
+            atipico = False
+            if p.id in programas_solicitudes:
+                atipico = True
+            else:
+                for o in oportunidades:
+                    if o.id in alumnos_solicitudes:
+                        atipico = True
+                        break
             items.append({
                 "id": p.id,
                 "nombre": p.nombre,
@@ -178,12 +227,14 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "metaDeVenta": p.metaDeVenta,
                 "puntoMinimoApertura": p.puntoMinimoApertura,
                 "subdireccion": p.subdireccion,
-                "oportunidad_total_monto_propuesto": monto,
-                "oportunidad_total_count": count
+                "oportunidad_total_monto_propuesto": monto_opty,
+                "oportunidad_total_count": count_opty,
+                "atipico": atipico,
+                "es_aperturado": count_opty > p.puntoMinimoApertura,
             })
             total_meta += p.metaDeVenta or 0
-            total_monto += monto
-            total_oportunidades += count
+            total_monto += monto_opty
+            total_oportunidades += count_opty
     totalizadores = {
         "total_meta_de_venta": total_meta,
         "total_monto_propuesto": total_monto,
@@ -201,8 +252,8 @@ def obtener_informacion_preconciliacion(
 ):
     solicitudes = obtener_solicitudes_agrupadas(id_usuario, id_propuesta, db)
     # carteras = obtener_carteras_usuario(id_usuario, db)
-    programas_mes_conciliado = obtener_programas_mes_conciliado(id_usuario, id_propuesta, db)
-    programas_meses_anteriores = obtener_programas_meses_anteriores(id_usuario, id_propuesta, db)
+    programas_mes_conciliado = obtener_programas_mes_conciliado(id_usuario, id_propuesta, db, solicitudes)
+    programas_meses_anteriores = obtener_programas_meses_anteriores(id_usuario, id_propuesta, db, solicitudes)
     return {
         # "carteras": carteras,
         "solicitudes": solicitudes,
