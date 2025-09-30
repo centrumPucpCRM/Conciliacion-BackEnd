@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
+from sqlalchemy import Column, Date, Integer, String, Float, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -16,6 +16,8 @@ class Oportunidad(Base):
     partyNumber = Column(Integer)
     conciliado = Column(Boolean, default=False)
     posibleAtipico = Column(Boolean, default=False)
+    moneda = Column(String(50))
+    fechaMatricula = Column(Date)
     idPropuesta = Column(Integer, ForeignKey('propuesta.id'))
     propuesta = relationship('Propuesta')
     idPrograma = Column(Integer, ForeignKey('programa.id'))
@@ -24,4 +26,5 @@ class Oportunidad(Base):
     tipoCambio = relationship('TipoCambio')
     montoPropuesto = Column(Float)
     etapaVentaPropuesta = Column(String(255))
+    fechaMatriculaPropuesta = Column(Date)
     eliminado = Column(Boolean, default=False)

@@ -21,13 +21,7 @@ def listar_oportunidades(
     Lista oportunidades filtradas por propuesta y programa con paginación.
     """
     query = (
-        db.query(
-            Oportunidad.nombre,
-            Oportunidad.documentoIdentidad,
-            Oportunidad.monto,
-            Oportunidad.posibleAtipico,
-            Oportunidad.montoPropuesto,
-        )
+        db.query(Oportunidad)
         .filter(Oportunidad.idPropuesta == propuesta_id)
         .filter(Oportunidad.idPrograma == programa_id)
         .filter((Oportunidad.eliminado == False) | (Oportunidad.eliminado.is_(None)))
@@ -39,11 +33,19 @@ def listar_oportunidades(
 
     items = [
         {
-            "nombre": r.nombre,
             "documentoIdentidad": r.documentoIdentidad,
+            "nombre": r.nombre,
+            "descuento": r.descuento,
             "monto": r.monto,
-            "posibleAtipico": r.posibleAtipico,
             "montoPropuesto": r.montoPropuesto,
+            "moneda": r.moneda,
+            "fechaMatriculaPropuesta": r.fechaMatriculaPropuesta,
+            "posibleAtipico": r.posibleAtipico,
+            "becado": r.becado,
+            "partyNumber": r.partyNumber,
+            "conciliado": r.conciliado,
+            "tipoCambioEquivalencia": r.tipoCambio.equivalencia if r.tipoCambio else None,
+            "etapaVentaPropuesta": r.etapaVentaPropuesta,
         }
         for r in rows
     ]

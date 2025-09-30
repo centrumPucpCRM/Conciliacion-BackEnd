@@ -53,7 +53,6 @@ def crear_solicitud_generica(
 		elif tipo_solicitud == "EDICION_ALUMNO":
 			return crear_solicitud_agregar_alumno(body, db)
 		elif tipo_solicitud == "ELIMINACION_BECADO":
-			#Por ahora esto no genera una solicitud
 			pass
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
@@ -162,7 +161,7 @@ def crear_solicitud_agregar_alumno(body, db):
 	)
 	db.add(sxos)
 	db.commit()
-	return {"msg": "Solicitud AGREGAR_ALUMNO creada", "id": solicitud.id}
+	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
 
 def crear_solicitud_exclusion_programa(body, db):
 	from datetime import datetime
@@ -217,4 +216,4 @@ def crear_solicitud_exclusion_programa(body, db):
 	)
 	db.add(sxps)
 	db.commit()
-	return {"msg": "Solicitud EXCLUSION_PROGRAMA creada", "id": solicitud.id}
+	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}

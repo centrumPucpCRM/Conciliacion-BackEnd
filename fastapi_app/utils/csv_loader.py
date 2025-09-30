@@ -262,6 +262,8 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     etapaDeVentas=etapaDeVentas,
                     descuento=descuento,
                     monto=monto,
+                    moneda=moneda,
+                    fechaMatricula=row.get('oportunidad.fecha_matricula'),
                     becado=becado,
                     partyNumber=partyNumber,
                     conciliado=conciliado,
@@ -270,6 +272,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     idTipoCambio=id_tipo_cambio,
                     montoPropuesto=monto,
                     etapaVentaPropuesta=etapaDeVentas,
+                    fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
                     posibleAtipico=posibleAtipico
                 )
                 oportunidades_bulk.append(oportunidad)
