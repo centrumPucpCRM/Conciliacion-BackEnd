@@ -115,6 +115,9 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     # Obtener ids de alumnos y programas involucrados en solicitudes
     alumnos_solicitudes = set()
     programas_solicitudes = set()
+    print(solicitudes)
+    print(solicitudes.get("solicitudesPropuestaOportunidad"))
+    print(solicitudes.get("solicitudesPropuestaPrograma"))
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
@@ -123,7 +126,8 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
-
+    print(alumnos_solicitudes)
+    print(programas_solicitudes)
     for p in programas_filtrados:
         oportunidades = oportunidades_por_programa.get(p.id, [])
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
