@@ -151,8 +151,8 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "subdireccion": p.subdireccion,
             "oportunidad_total_monto_propuesto": monto_opty,
             "oportunidad_total_count": count_opty,
-            "atipico": atipico, 
-            "es_aperturado": count_opty > p.puntoMinimoApertura,
+            "atipico": bool(atipico),
+            "aperturado": bool(count_opty > p.puntoMinimoApertura),
 
         })
         total_meta += p.metaDeVenta or 0
