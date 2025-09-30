@@ -3,7 +3,7 @@ from fastapi_app.models.solicitud import Solicitud as SolicitudModel
 from fastapi_app.models.programa import Programa
 from fastapi_app.models.oportunidad import Oportunidad
 from fastapi_app.models.usuario import Usuario
-
+from fastapi_app.models.log import Log
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
 from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
 from fastapi_app.models.solicitud import TipoSolicitud, ValorSolicitud
@@ -99,6 +99,7 @@ def crear_solicitud_alumno(body, db):
 	)
 	db.add(sxos)
 	db.commit()
+
 	# Si es EDICION_ALUMNO, actualizar el montoPropuesto de la oportunidad
 	if tipo_solicitud == "EDICION_ALUMNO":
 		monto_propuesto = body.get("montoPropuesto")
@@ -110,6 +111,28 @@ def crear_solicitud_alumno(body, db):
 		oportunidad.etapaVentaPropuesta = "3.5 BecadoMatriculado"
 		oportunidad.fechaMatriculaPropuesta = datetime.now().date()
 		db.commit()
+
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idOportunidad': id_oportunidad,
+			'montoPropuesto': sxos.montoPropuesto,
+			'montoObjetado': sxos.montoObjetado,
+			'tipo_solicitud': tipo_solicitud,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	db.commit()
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
 
 def crear_solicitud_programa(body, db):
@@ -170,4 +193,25 @@ def crear_solicitud_programa(body, db):
 		db.commit()
 	elif tipo_solicitud == "FECHA_CAMBIADA":
 		pass
+
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idPrograma': id_programa,
+			'aperturadoPropuesta': getattr(programa, 'aperturadoPropuesta', None),
+			'tipo_solicitud': tipo_solicitud,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	db.commit()
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
