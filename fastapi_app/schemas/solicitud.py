@@ -30,6 +30,7 @@ class Solicitud(BaseModel):
     creadoEn: Optional[datetime]
     oportunidad: Optional[SolicitudOportunidad]
     programa: Optional[SolicitudPrograma]
+    nombrePrograma: Optional[str] = None
 
     class Config:
         orm_mode = True

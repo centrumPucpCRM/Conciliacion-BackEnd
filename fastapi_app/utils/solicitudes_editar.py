@@ -21,6 +21,36 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	if comentario:
 		solicitud.comentario = comentario
 	solicitud.creadoEn = datetime.now()
+
+	# Crear log de auditoría detallado
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.idValorSolicitud,
+			'valorSolicitud': valor_solicitud_nombre,
+			'idPropuesta': solicitud.idPropuesta,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idPrograma': solicitud.programa.idPrograma,
+			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
+			'idPropuesta': solicitud.idPropuesta,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idOportunidad': solicitud.oportunidad.idOportunidad,
+			'montoPropuesto': None,
+			'montoObjetado': None,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+
 	db.commit()
 	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
 

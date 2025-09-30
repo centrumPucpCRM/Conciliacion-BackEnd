@@ -60,25 +60,34 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
                     "dni": oportunidad_db.documentoIdentidad,
                 })
                 oportunidad = oportunidad_dict
-        print(oportunidad)
-        if sxps:
+            # Obtener el nombre del programa asociado a la oportunidad y ponerlo en el objeto programa
+            programa = None
+            if oportunidad_db:
+                programa_db = db.query(Programa).filter_by(id=oportunidad_db.idPrograma).first()
+                if programa_db:
+                    # Armar objeto con la forma de SolicitudPrograma y agregar el nombre
+                    programa = {
+                        "idPrograma": programa_db.id,
+                        "fechaInaguracionPropuesta": None,
+                        "fechaInaguracionObjetada": None,
+                        "nombre": programa_db.nombre
+                    }
+        elif sxps:
             programa_db = db.query(Programa).filter_by(id=sxps.idPrograma).first()
             programa = SolicitudPrograma(
                 idPrograma=sxps.idPrograma,
                 fechaInaguracionPropuesta=sxps.fechaInaguracionPropuesta,
                 fechaInaguracionObjetada=sxps.fechaInaguracionObjetada
             )
-            print(programa_db)
-            print("prepase")
             if programa_db:
-                print("pase")
                 programa_dict = programa.model_dump()
                 programa_dict.update({
                     "nombre": programa_db.nombre,
                     "puntoMinimoApertura": programa_db.puntoMinimoApertura,
                 })
                 programa = programa_dict
-                print(programa)
+            # Si es solicitud de programa, no mostrar nada en oportunidad
+            oportunidad = None
         solicitud_dict = Solicitud(
             id=s.id,
             idUsuarioReceptor=s.idUsuarioReceptor,
