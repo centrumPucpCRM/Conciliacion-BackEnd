@@ -23,4 +23,4 @@ class Programa(Base):
     idTipoCambio = Column(Integer, ForeignKey('tipo_cambio.id'))
     tipoCambio = relationship('TipoCambio')
     fechaInaguracionPropuesta = Column(Date)
-    aperturadoPropuesta = Column(Boolean)
+    aperturadoPropuesta = Column(Boolean,default=True)

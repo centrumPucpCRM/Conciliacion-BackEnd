@@ -16,7 +16,7 @@ def seed_lovs():
         # Solicitud: tipoSolicitud y valorSolicitud
         from .models.solicitud import TipoSolicitud, ValorSolicitud
         tipo_solicitud_lovs = [
-            "EXCLUSION_PROGRAMA", "ELIMINACION_BECADO", "EDICION_ALUMNO", "AGREGAR_ALUMNO",
+            "EXCLUSION_PROGRAMA", "ELIMINACION_BECADO","ELIMINACION_BECADO_REVERTIR", "EDICION_ALUMNO", "AGREGAR_ALUMNO",
             "APROBACION_JP", "APROBACION_COMERCIAL", "APROBACION_DAF"
         ]
         valor_solicitud_lovs = ["ACEPTADO", "REACHAZADO", "PENDIENTE"]
