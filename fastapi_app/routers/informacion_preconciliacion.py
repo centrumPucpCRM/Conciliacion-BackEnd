@@ -47,17 +47,38 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         oportunidad = None
         programa = None
         if sxos:
+            oportunidad_db = db.query(Oportunidad).filter_by(id=sxos.idOportunidad).first()
             oportunidad = SolicitudOportunidad(
                 idOportunidad=sxos.idOportunidad,
                 montoPropuesto=sxos.montoPropuesto,
                 montoObjetado=sxos.montoObjetado
             )
+            if oportunidad_db:
+                oportunidad_dict = oportunidad.model_dump()
+                oportunidad_dict.update({
+                    "nombre": oportunidad_db.nombre,
+                    "documentoIdentidad": oportunidad_db.documentoIdentidad,
+                })
+                oportunidad = oportunidad_dict
+        print(oportunidad)
         if sxps:
+            programa_db = db.query(Programa).filter_by(id=sxps.idPrograma).first()
             programa = SolicitudPrograma(
                 idPrograma=sxps.idPrograma,
                 fechaInaguracionPropuesta=sxps.fechaInaguracionPropuesta,
                 fechaInaguracionObjetada=sxps.fechaInaguracionObjetada
             )
+            print(programa_db)
+            print("prepase")
+            if programa_db:
+                print("pase")
+                programa_dict = programa.model_dump()
+                programa_dict.update({
+                    "nombre": programa_db.nombre,
+                    "puntoMinimoApertura": programa_db.puntoMinimoApertura,
+                })
+                programa = programa_dict
+                print(programa)
         solicitud_dict = Solicitud(
             id=s.id,
             idUsuarioReceptor=s.idUsuarioReceptor,
@@ -70,7 +91,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             creadoEn=s.creadoEn,
             oportunidad=oportunidad,
             programa=programa
-        ).dict()
+        ).model_dump()
         tipo = solicitud_dict["tipoSolicitud"]
         if tipo in tipos_oportunidad:
             solicitudesPropuestaOportunidad.append(solicitud_dict)
@@ -115,9 +136,6 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     # Obtener ids de alumnos y programas involucrados en solicitudes
     alumnos_solicitudes = set()
     programas_solicitudes = set()
-    print(solicitudes)
-    print(solicitudes.get("solicitudesPropuestaOportunidad"))
-    print(solicitudes.get("solicitudesPropuestaPrograma"))
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
@@ -126,8 +144,6 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
-    print(alumnos_solicitudes)
-    print(programas_solicitudes)
     for p in programas_filtrados:
         oportunidades = oportunidades_por_programa.get(p.id, [])
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)

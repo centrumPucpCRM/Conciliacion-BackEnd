@@ -7,10 +7,16 @@ class SolicitudOportunidad(BaseModel):
     montoPropuesto: Optional[float]
     montoObjetado: Optional[float]
 
+    class Config:
+        extra = "allow"
+
 class SolicitudPrograma(BaseModel):
     idPrograma: int
     fechaInaguracionPropuesta: Optional[date]
     fechaInaguracionObjetada: Optional[date]
+
+    class Config:
+        extra = "allow"
 
 class Solicitud(BaseModel):
     id: int

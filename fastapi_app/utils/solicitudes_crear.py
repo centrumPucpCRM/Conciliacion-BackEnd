@@ -7,11 +7,10 @@ from fastapi_app.models.log import Log
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
 from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
 from fastapi_app.models.solicitud import TipoSolicitud, ValorSolicitud
-
+from datetime import datetime
 from fastapi import  HTTPException
 
 def crear_solicitud_alumno(body, db):
-	from datetime import datetime
 	# Determinar tipo de solicitud antes de validar campos
 	tipo_solicitud = body.get("tipo_solicitud")
 	if not tipo_solicitud:
@@ -19,7 +18,7 @@ def crear_solicitud_alumno(body, db):
 
 	if tipo_solicitud == "EDICION_ALUMNO":
 		required_fields = ["idOportunidad", "tipo_solicitud", "montoPropuesto"]
-	else:
+	elif tipo_solicitud == "AGREGAR_ALUMNO":
 		required_fields = ["idOportunidad", "comentario", "tipo_solicitud"]
 
 	for field in required_fields:
@@ -136,7 +135,6 @@ def crear_solicitud_alumno(body, db):
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
 
 def crear_solicitud_programa(body, db):
-	from datetime import datetime
 	# Validar campos obligatorios
 	required_fields = ["idPrograma", "comentario","tipo_solicitud"]
 	for field in required_fields:
@@ -168,7 +166,7 @@ def crear_solicitud_programa(body, db):
 
 	# Crear la solicitud
 	solicitud = SolicitudModel(
-		idUsuarioReceptor="2",  # El id del daf.supervisor
+		idUsuarioReceptor="1",  # El id del daf.supervisor
 		idUsuarioGenerador=id_usuario_generador,
 		abierta=True,
 		tipoSolicitud_id=tipo_solicitud_id,
