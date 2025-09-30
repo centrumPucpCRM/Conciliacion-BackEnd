@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, Float, Integer, String
+from sqlalchemy import Boolean, Column, Date, Float, Integer, String
 from ..database import Base
 
 from sqlalchemy import Column, Integer, String, Date, Float, ForeignKey
@@ -23,3 +23,4 @@ class Programa(Base):
     idTipoCambio = Column(Integer, ForeignKey('tipo_cambio.id'))
     tipoCambio = relationship('TipoCambio')
     fechaInaguracionPropuesta = Column(Date)
+    aperturadoPropuesta = Column(Boolean)

@@ -1,36 +1,3 @@
-
-from pydantic import model_validator
-
-# Schemas para entrada de SolicitudAlumno y SolicitudPrograma
-class SolicitudAlumnoIn(BaseModel):
-    tipo_solicitud: str
-    idUsuarioGenerador: int
-    idOportunidad: int
-    montoPropuesto: float = None
-    montoObjetado: float = None
-
-    @model_validator(mode="after")
-    def validar_campos(self):
-        if self.tipo_solicitud == "AGREGAR_ALUMNO":
-            if self.montoPropuesto is None or self.montoObjetado is None:
-                raise ValueError("montoPropuesto y montoObjetado son requeridos para AGREGAR_ALUMNO")
-        return self
-
-class SolicitudProgramaIn(BaseModel):
-    tipo_solicitud: str
-    idUsuarioGenerador: int
-    idPrograma: int
-
-    @model_validator(mode="after")
-    def validar_campos(self):
-        if self.tipo_solicitud == "EXCLUSION_PROGRAMA":
-            if self.idPrograma is None:
-                raise ValueError("idPrograma es requerido para EXCLUSION_PROGRAMA")
-        elif self.tipo_solicitud == "FECHA_CAMBIADA":
-            # Pendiente, no implementado
-            pass
-        return self
-
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime, date
@@ -60,3 +27,5 @@ class Solicitud(BaseModel):
 
     class Config:
         orm_mode = True
+
+
