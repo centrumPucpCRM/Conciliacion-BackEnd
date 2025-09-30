@@ -230,7 +230,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "oportunidad_total_monto_propuesto": monto_opty,
                 "oportunidad_total_count": count_opty,
                 "atipico": atipico,
-                "es_aperturado": count_opty > p.puntoMinimoApertura,
+                "aperturado": count_opty > p.puntoMinimoApertura,
             })
             total_meta += p.metaDeVenta or 0
             total_monto += monto_opty
