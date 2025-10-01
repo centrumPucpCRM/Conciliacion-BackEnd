@@ -17,7 +17,9 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	if valor_solicitud_nombre == "RECHAZADO":
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	solicitud.idValorSolicitud = valor_solicitud_obj.id
+	print(valor_solicitud_obj.id)
+	solicitud.valorSolicitud = valor_solicitud_obj
+	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 	if comentario:
 		solicitud.comentario = comentario
 	solicitud.creadoEn = datetime.now()
@@ -33,17 +35,14 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 			'idPropuesta': solicitud.idPropuesta,
 			'comentario': solicitud.comentario,
 			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.idValorSolicitud,
 			'valorSolicitud': valor_solicitud_nombre,
 			'idPropuesta': solicitud.idPropuesta,
 			'abierta': solicitud.abierta,
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idPrograma': solicitud.programa.idPrograma,
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
 			'idPropuesta': solicitud.idPropuesta,
 			'abierta': solicitud.abierta,
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idOportunidad': solicitud.oportunidad.idOportunidad,
 			'montoPropuesto': None,
 			'montoObjetado': None,
 		}
@@ -53,7 +52,3 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 
 	db.commit()
 	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
-
-def aceptar_rechazar_edicion_alumno(body, db):
-
-	return {"msg": "Función aceptar_rechazar_edicion_alumno no implementada"}

@@ -76,7 +76,7 @@ def crear_solicitud_alumno(body, db):
 
 	# Crear la solicitud
 	solicitud = SolicitudModel(
-		idUsuarioReceptor="2",#El id del daf.supervisor
+		idUsuarioReceptor="1",#El id del daf.supervisor
 		idUsuarioGenerador=id_usuario_generador,
 		abierta=True,
 		tipoSolicitud_id=tipo_solicitud_id,

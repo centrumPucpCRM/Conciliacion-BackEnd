@@ -155,6 +155,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         moneda = str(row.get('programa.moneda', 'PEN')).strip()
         subdireccion = str(row.get('programa.subdireccion', '')) if row.get('programa.subdireccion', None) is not None else None
         usuario_nombre = str(row.get('usuario.nombre', '')).strip()
+
+        mes = pd.to_datetime(row.get('programa.fecha_de_inauguracion')).strftime('%m')
         programa = Programa(
             codigo=programa_codigo,
             nombre=programa_nombre,
@@ -168,10 +170,9 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             idJefeProducto=usuarios_dict.get(usuario_nombre).id if usuario_nombre in usuarios_dict else None,
             fechaInaguracionPropuesta=row.get('programa.fecha_de_inauguracion'),
             idTipoCambio=tipos_cambio_dict.get(moneda).id,
-            cartera=str('programa.cartera'),
-            mes = row.get('programa.fecha_de_inauguracion'), # Sacar el mes 
-            mesPropuesto = row.get('programa.fecha_de_inauguracion') #Sacar el mes de conciliacion
-
+            cartera=row.get('cartera.nombre'),
+            mes=mes,
+            mesPropuesto=mes
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
@@ -213,30 +214,23 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
             return False
         return bool(val)
 
-    # Vectorized es_atipico calculation for the DataFrame
-    def es_atipico_vectorizado(descuento, monto, precio_lista):
-        try:
-            descuento_float = descuento.astype(float)
-        except Exception:
-            descuento_float = pd.Series([0.0]*len(descuento))
-        cond1 = (descuento_float < 0) | (descuento_float > 1)
-        decimales = descuento_float.round(4).astype(str).str.split('.')
-        cond2 = decimales.apply(lambda x: len(x) == 2 and x[1][2:] != '00')
-        ratio = monto / precio_lista.replace(0, 1)
-        ratio_decimales = ratio.round(4).astype(str).str.split('.')
-        cond3 = ratio_decimales.apply(lambda x: len(x) == 2 and x[1][2:] != '00')
-        return cond1 | cond2 | cond3
-
-    # Prepare precio_lista series for each oportunidad
-    df['programa.codigo'] = df['programa.codigo'].astype(str).str.strip()
-    precio_lista_map = {k: v.precioDeLista for k, v in programas_dict.items()}
-    df['precio_lista_prog'] = df['programa.codigo'].map(precio_lista_map).fillna(0)
-    df['oportunidad.posibleAtipico'] = es_atipico_vectorizado(
-        df['oportunidad.descuento'].fillna(0),
-        df['oportunidad.monto'].fillna(0),
-        df['precio_lista_prog'].fillna(0)
-    )
-
+    # Calcular si es atípico fila por fila (simple, no vectorizado)
+    atipicos = []
+    for idx, row in df.iterrows():
+        descuento = float(row.get('oportunidad.descuento', 0) or 0)
+        monto = float(row.get('oportunidad.monto', 0) or 0)
+        precio_lista = float(row.get('oportunidad.precio_lista', 0) or 0)
+        cond1 = descuento < 0 or descuento > 1
+        # decimales de descuento
+        decimales_desc = str(round(descuento, 4)).split('.')
+        cond2 = len(decimales_desc) == 2 and len(decimales_desc[1]) > 2 and decimales_desc[1][2:] != '00'
+        # decimales de monto/precio_lista
+        ratio = monto / precio_lista if precio_lista else 0
+        decimales_ratio = str(round(ratio, 4)).split('.')
+        cond3 = len(decimales_ratio) == 2 and len(decimales_ratio[1]) > 2 and decimales_ratio[1][2:] != '00'
+        atipicos.append(cond1 or cond2 or cond3)
+    df['oportunidad.posibleAtipico'] = atipicos
+    print(df['oportunidad.posibleAtipico'].value_counts())
     oportunidades_bulk = []
     oportunidades_dict = {}
     propuesta_id = propuesta_unica.id
