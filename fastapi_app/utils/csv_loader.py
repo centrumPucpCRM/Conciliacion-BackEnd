@@ -155,6 +155,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         moneda = str(row.get('programa.moneda', 'PEN')).strip()
         subdireccion = str(row.get('programa.subdireccion', '')) if row.get('programa.subdireccion', None) is not None else None
         usuario_nombre = str(row.get('usuario.nombre', '')).strip()
+
+        mes = pd.to_datetime(row.get('programa.fecha_de_inauguracion')).strftime('%m')
         programa = Programa(
             codigo=programa_codigo,
             nombre=programa_nombre,
@@ -168,10 +170,9 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             idJefeProducto=usuarios_dict.get(usuario_nombre).id if usuario_nombre in usuarios_dict else None,
             fechaInaguracionPropuesta=row.get('programa.fecha_de_inauguracion'),
             idTipoCambio=tipos_cambio_dict.get(moneda).id,
-            cartera=str('programa.cartera'),
-            mes = row.get('programa.fecha_de_inauguracion'), # Sacar el mes 
-            mesPropuesto = row.get('programa.fecha_de_inauguracion') #Sacar el mes de conciliacion
-
+            cartera=row.get('cartera.nombre'),
+            mes=mes,
+            mesPropuesto=mes
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
