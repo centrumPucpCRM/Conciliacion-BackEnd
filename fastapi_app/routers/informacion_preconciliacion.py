@@ -30,8 +30,9 @@ from fastapi_app.models.cartera import Cartera
 #         for c in carteras
 #     ]
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
-    if id_usuario == 1:
-        id_usuario = 2
+    if id_usuario == 2: 
+        id_usuario = 1
+    print(id_usuario)
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
     tipo_programa = "EXCLUSION_PROGRAMA"
     solicitudes = db.query(SolicitudModel).filter(
@@ -108,11 +109,13 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             solicitudesPropuestaPrograma.append(solicitud_dict)
         else:
             solicitudesGenerales.append(solicitud_dict)
-    return {
-        "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-        "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-        "solicitudesGenerales": solicitudesGenerales
-    }
+    if id_usuario in [2, 4, 5, 6]:
+        return {"solicitudesGenerales": solicitudesGenerales}
+    else:
+        return {
+            "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+            "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
+        }
 
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):

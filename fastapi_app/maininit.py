@@ -19,7 +19,7 @@ def seed_lovs():
             "EXCLUSION_PROGRAMA", "ELIMINACION_BECADO","ELIMINACION_BECADO_REVERTIR", "EDICION_ALUMNO", "AGREGAR_ALUMNO",
             "APROBACION_JP", "APROBACION_COMERCIAL", "APROBACION_DAF"
         ]
-        valor_solicitud_lovs = ["ACEPTADO", "REACHAZADO", "PENDIENTE"]
+        valor_solicitud_lovs = ["ACEPTADO", "RECHAZADO", "PENDIENTE"]
         existentes_tipo = {t.nombre for t in db.query(TipoSolicitud).all()}
         for nombre in tipo_solicitud_lovs:
             if nombre not in existentes_tipo:

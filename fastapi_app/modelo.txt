@@ -28,7 +28,7 @@ idUsuarioReceptor (int)
 idUsuarioGenerador (int)
 abierta (bool)
 tipoSolicitud (LOV : EXCLUSION_PROGRAMA,ELIMINACION_BECADO,EDICION_ALUMNO,AGREGAR_ALUMNO,APROBACION_JP,APROBACION_COMERCIAL,APROBACION_DAF)
-valorSolicitud (LOV: ACEPTADO,REACHAZADO,PENDIENTE)
+valorSolicitud (LOV: ACEPTADO,RECHAZADO,PENDIENTE)
 Comentario (String)
 CreadoEn (DateTime)
 ===================
