@@ -283,9 +283,18 @@ def obtener_informacion_preconciliacion(
     # carteras = obtener_carteras_usuario(id_usuario, db)
     programas_mes_conciliado = obtener_programas_mes_conciliado(id_usuario, id_propuesta, db, solicitudes)
     programas_meses_anteriores = obtener_programas_meses_anteriores(id_usuario, id_propuesta, db, solicitudes)
-    return {
+
+    # Obtener la propuesta y su estado
+    propuesta = db.query(Propuesta).get(id_propuesta)
+    estado_generada = False
+    if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
+        estado_generada = propuesta.estadoPropuesta.nombre.strip().upper() == "GENERADA"
+
+    response = {
         # "carteras": carteras,
-        "solicitudes": solicitudes,
         "mes_conciliado": programas_mes_conciliado,
         "meses_anteriores": programas_meses_anteriores
     }
+    if not estado_generada:
+        response["solicitudes"] = solicitudes   
+    return response
