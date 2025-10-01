@@ -21,7 +21,7 @@ def listar_oportunidades(
     """
     Lista oportunidades filtradas por propuesta y programa con paginación.
     """
-    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - SolicitudPerdida"]
+    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     query = (
         db.query(Oportunidad)
         .filter(Oportunidad.idPropuesta == propuesta_id)
@@ -73,7 +73,7 @@ def listar_oportunidades_disponibles(
     """
     Lista oportunidades filtradas por propuesta y programa con paginación, incluyendo solo las etapas de etapas_excluir.
     """
-    etapas_incluir = ["1 - Interés", "2 - Calificación", "5 - SolicitudPerdida"]
+    etapas_incluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     query = (
         db.query(Oportunidad)
         .filter(Oportunidad.idPropuesta == propuesta_id)

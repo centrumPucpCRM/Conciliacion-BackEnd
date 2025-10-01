@@ -168,6 +168,10 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             idJefeProducto=usuarios_dict.get(usuario_nombre).id if usuario_nombre in usuarios_dict else None,
             fechaInaguracionPropuesta=row.get('programa.fecha_de_inauguracion'),
             idTipoCambio=tipos_cambio_dict.get(moneda).id,
+            cartera=str('programa.cartera'),
+            mes = row.get('programa.fecha_de_inauguracion'), # Sacar el mes 
+            mesPropuesto = row.get('programa.fecha_de_inauguracion') #Sacar el mes de conciliacion
+
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
