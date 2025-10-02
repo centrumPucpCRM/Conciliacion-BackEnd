@@ -4,7 +4,7 @@ import os
 import pymysql
 import logging
 
-DATABASE_URL = "mysql+pymysql://admin:5QeWOnjYCvEA2lOtkCfc@conciliaciondb.ci1gweq8a0j0.us-east-1.rds.amazonaws.com:3306/conciliacion"
+DATABASE_URL = "mysql+pymysql://root:jiAHcYHqrUaXpCQCHfJFgqRYAJahTJpG@nozomi.proxy.rlwy.net:53584/conciliacion"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
