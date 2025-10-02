@@ -67,13 +67,23 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 			else:
 				sxop.montoObjetado = body.get("montoPropuesto")
 			# Actualizar el montoPropuesto en Oportunidad si corresponde
-			oportunidad = db.query(Oportunidad).filter_by(id=sxop.idOportunidad).first()
-			if oportunidad:
-				oportunidad.montoPropuesto = sxop.montoPropuesto
+	oportunidad = db.query(Oportunidad).filter_by(id=sxop.idOportunidad).first()
+	if sxop.montoObjetado:
+		oportunidad.montoPropuesto = sxop.montoObjetado
+	else:
+		oportunidad.montoPropuesto = sxop.montoPropuesto
 
 	comentario = body.get("comentario")
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	nombre_generador = usuario_generador.nombre if usuario_generador else "-"
+	nombre_receptor = usuario_receptor.nombre if usuario_receptor else "-"
 	if comentario:
-		solicitud.comentario = comentario
+		solicitud.comentario = (
+			comentario
+			+ f" | Monto Propuesto por  {nombre_receptor} : " + str(sxop.montoPropuesto)
+			+ f" | Monto Objetado por  {nombre_generador} : " + str(sxop.montoObjetado)
+		)
 	solicitud.creadoEn = datetime.now()
 
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
@@ -82,13 +92,21 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 
 
+	# Obtener nombres de usuario generador y receptor
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	nombre_generador = usuario_generador.nombre if usuario_generador else None
+	nombre_receptor = usuario_receptor.nombre if usuario_receptor else None
+
 	log_data = {
 		'idSolicitud': solicitud.id,
 		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
 		'creadoEn': solicitud.creadoEn,
 		'auditoria': {
 			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'nombreUsuarioReceptor': nombre_receptor,
 			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'nombreUsuarioGenerador': nombre_generador,
 			'idPropuesta': solicitud.idPropuesta,
 			'comentario': solicitud.comentario,
 			'abierta': solicitud.abierta,

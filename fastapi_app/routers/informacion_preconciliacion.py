@@ -32,7 +32,6 @@ from fastapi_app.models.cartera import Cartera
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     if id_usuario == 2: 
         id_usuario = 1
-    print(id_usuario)
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
     tipo_programa = "EXCLUSION_PROGRAMA"
     solicitudes = db.query(SolicitudModel).filter(
@@ -132,9 +131,14 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         anio_anterior = mes_conciliacion.year
     ids_no_filtrar = {1,2,3,4,5,6}
     if id_usuario in ids_no_filtrar:
-        programas = db.query(Programa).filter(Programa.fechaDeInaguracion != None).all()
+        programas = db.query(Programa).filter(
+            Programa.idPropuesta == id_propuesta
+        ).all()
     else:
-        programas = db.query(Programa).filter(Programa.idJefeProducto == id_usuario, Programa.fechaDeInaguracion != None).all()
+        programas = db.query(Programa).filter(
+            Programa.idJefeProducto == id_usuario,
+            Programa.idPropuesta == id_propuesta
+        ).all()
     programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes_anterior and p.fechaDeInaguracion.year == anio_anterior]
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
@@ -145,7 +149,6 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     total_meta = 0
     total_monto = 0
     total_oportunidades = 0
-
     # Obtener ids de alumnos y programas involucrados en solicitudes
     alumnos_solicitudes = set()
     programas_solicitudes = set()
@@ -235,9 +238,14 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
             mes += 12
             anio -= 1
         if id_usuario in ids_no_filtrar:
-            programas = db.query(Programa).filter(Programa.fechaDeInaguracion != None).all()
+            programas = db.query(Programa).filter(
+                Programa.idPropuesta == id_propuesta
+            ).all()
         else:
-            programas = db.query(Programa).filter(Programa.idJefeProducto == id_usuario, Programa.fechaDeInaguracion != None).all()
+            programas = db.query(Programa).filter(
+                Programa.idJefeProducto == id_usuario,
+                Programa.idPropuesta == id_propuesta
+            ).all()
         programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
         for p in programas_filtrados:
             oportunidades = oportunidades_por_programa.get(p.id, [])
