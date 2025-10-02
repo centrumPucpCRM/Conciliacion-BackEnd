@@ -13,18 +13,75 @@ from fastapi import  HTTPException
 
 def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	valor_solicitud_nombre = body.get("valorSolicitud")
-	comentario = body.get("comentario")
 	if valor_solicitud_nombre == "RECHAZADO":
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
-	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	print(valor_solicitud_obj.id)
-	solicitud.valorSolicitud = valor_solicitud_obj
-	solicitud.valorSolicitud_id = valor_solicitud_obj.id
+	comentario = body.get("comentario")
+	print(comentario)
 	if comentario:
 		solicitud.comentario = comentario
 	solicitud.creadoEn = datetime.now()
 
+	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
+	print(valor_solicitud_obj.id)
+	solicitud.valorSolicitud = valor_solicitud_obj
+	solicitud.valorSolicitud_id = valor_solicitud_obj.id
+
 	# Crear log de auditoría detallado
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud': valor_solicitud_nombre,
+			'idPropuesta': solicitud.idPropuesta,
+			'abierta': solicitud.abierta,
+			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
+			'idPropuesta': solicitud.idPropuesta,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'montoPropuesto': None,
+			'montoObjetado': None,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+
+	db.commit()
+	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
+
+def aceptar_rechazar_edicion_alumno(body, db, solicitud):
+	valor_solicitud_nombre = body.get("valorSolicitud")
+	sxop = db.query(SolicitudXOportunidad).filter_by(idSolicitud=solicitud.id).first()
+	if valor_solicitud_nombre == "RECHAZADO":
+		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
+		# Buscar la relación SolicitudXOportunidad
+		if sxop:
+			if sxop.montoObjetado:
+				sxop.montoPropuesto = sxop.montoObjetado
+				sxop.montoObjetado = body.get("montoPropuesto")
+			else:
+				sxop.montoObjetado = body.get("montoPropuesto")
+			# Actualizar el montoPropuesto en Oportunidad si corresponde
+			oportunidad = db.query(Oportunidad).filter_by(id=sxop.idOportunidad).first()
+			if oportunidad:
+				oportunidad.montoPropuesto = sxop.montoPropuesto
+
+	comentario = body.get("comentario")
+	if comentario:
+		solicitud.comentario = comentario
+	solicitud.creadoEn = datetime.now()
+
+	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
+	print(valor_solicitud_obj.id)
+	solicitud.valorSolicitud = valor_solicitud_obj
+	solicitud.valorSolicitud_id = valor_solicitud_obj.id
+
+
 	log_data = {
 		'idSolicitud': solicitud.id,
 		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
@@ -42,9 +99,8 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
 			'idPropuesta': solicitud.idPropuesta,
 			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'montoPropuesto': None,
-			'montoObjetado': None,
+			'montoPropuesto': sxop.montoPropuesto,
+			'montoObjetado': sxop.montoObjetado,
 		}
 	}
 	log = Log(**log_data)

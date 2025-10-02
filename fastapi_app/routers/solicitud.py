@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa
-from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico
+from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
 # Endpoint generico para crear solicitudes de alumno o programa
@@ -105,7 +105,7 @@ def crear_solicitud_generica(
 			pass
 	return
 
-@router.post("/editar")
+@router.patch("/editar")
 def editar_solicitud_generica(
 	body: dict = Body(
 		...,
@@ -120,7 +120,6 @@ def editar_solicitud_generica(
 			#Ejemplo de rechazar
 			"AGREGAR_ALUMNO":{
 				"idSolicitud": 5,#tipo_solicitud:"AGREGAR_ALUMNO",
-				"idOportunidad": 10,
 				"valorSolicitud": "RECHAZADO",
 				"comentario": "Agregar de alumno por solicitud del usuario."
 			},
@@ -130,18 +129,14 @@ def editar_solicitud_generica(
 			#Ejemplo de rechazar	
 			"EXCLUSION_PROGRAMA":{
 				"idSolicitud": 5,#tipo_solicitud:"EXCLUSION_PROGRAMA",
-				"idPrograma": 218,
 				"valorSolicitud": "ACEPTADO",
 			},
 			#Ejemplo de rechazar	
 			"EXCLUSION_PROGRAMA":{
 				"idSolicitud": 5,#tipo_solicitud:"EXCLUSION_PROGRAMA",
-				"idPrograma": 218,
 				"valorSolicitud": "RECHAZADO",
 				"comentario": "DAF solicita la exclusión del programa."
 			},
-
-
 			#Si el montoObjetado tiene valor, el valor de este pasa a montoPropuesto(anterior)
 			#Y el montoObjetado es el nuevo valor
 			#Se genera un comentario automaticamente
@@ -155,8 +150,13 @@ def editar_solicitud_generica(
 	),
 	db: Session = Depends(get_db)
 ):
+	print(body)
 	idSolicitud = body.get("idSolicitud")
+	print(idSolicitud)
 	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
+	print(solicitud)
+	print(solicitud.tipoSolicitud)
+	print(solicitud.tipoSolicitud.nombre)
 	tipo_solicitud = solicitud.tipoSolicitud.nombre
 
 	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO","ELIMINACION_BECADO_REVERTIR"]:
@@ -164,7 +164,7 @@ def editar_solicitud_generica(
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "EDICION_ALUMNO":
 			pass
-			#return aceptar_rechazar_edicion_alumno(body, db,solicitud)
+			return aceptar_rechazar_edicion_alumno(body, db,solicitud)
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
