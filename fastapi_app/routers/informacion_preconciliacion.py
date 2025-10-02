@@ -58,6 +58,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
                 oportunidad_dict.update({
                     "nombre": oportunidad_db.nombre,
                     "monto":oportunidad_db.monto,
+                    "montoPropuestoOportunidad": oportunidad_db.montoPropuesto,
                     "dni": oportunidad_db.documentoIdentidad,
                 })
                 oportunidad = oportunidad_dict

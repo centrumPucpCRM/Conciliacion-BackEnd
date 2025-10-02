@@ -60,19 +60,17 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	if valor_solicitud_nombre == "RECHAZADO":
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
 		# Buscar la relación SolicitudXOportunidad
-		if sxop:
-			if sxop.montoObjetado:
-				sxop.montoPropuesto = sxop.montoObjetado
-				sxop.montoObjetado = body.get("montoPropuesto")
-			else:
-				sxop.montoObjetado = body.get("montoPropuesto")
-			# Actualizar el montoPropuesto en Oportunidad si corresponde
+		if sxop.montoObjetado:
+			sxop.montoPropuesto = sxop.montoObjetado
+			sxop.montoObjetado = body.get("montoPropuesto")
+		else:
+			sxop.montoObjetado = body.get("montoPropuesto")
+		# Actualizar el montoPropuesto en Oportunidad si corresponde
 	oportunidad = db.query(Oportunidad).filter_by(id=sxop.idOportunidad).first()
 	if sxop.montoObjetado:
 		oportunidad.montoPropuesto = sxop.montoObjetado
 	else:
 		oportunidad.montoPropuesto = sxop.montoPropuesto
-
 	comentario = body.get("comentario")
 	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
 	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
@@ -81,8 +79,8 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	if comentario:
 		solicitud.comentario = (
 			comentario
-			+ f" | Monto Propuesto por  {nombre_receptor} : " + str(sxop.montoPropuesto)
-			+ f" | Monto Objetado por  {nombre_generador} : " + str(sxop.montoObjetado)
+			+ f" \n Monto Propuesto por  {nombre_receptor} : " + str(sxop.montoPropuesto)
+			+ f" \n Monto Objetado por  {nombre_generador} : " + str(sxop.montoObjetado)
 		)
 	solicitud.creadoEn = datetime.now()
 
