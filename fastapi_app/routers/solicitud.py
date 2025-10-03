@@ -1,5 +1,4 @@
 
-
 from fastapi import APIRouter, Depends
 
 from fastapi_app.database import get_db
@@ -62,6 +61,7 @@ def crear_solicitud_generica(
 		...,
 		example={
 			"AGREGAR_ALUMNO":{
+				"idUsuario": 2, #El id del usuario que hace la solicitud
 				"tipo_solicitud": "AGREGAR_ALUMNO",
 				"idOportunidad": 10,
 				"comentario": "Agregar de alumno por solicitud del usuario."
@@ -171,3 +171,37 @@ def editar_solicitud_generica(
 		elif tipo_solicitud == "FECHA_CAMBIADA":
 			pass
 	return
+
+@router.post("/crearLote")
+def crear_solicitudes_lote(
+	body: dict = Body(...),
+	db: Session = Depends(get_db)
+):
+	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "errores": []}
+	# Procesar alumnos añadidos
+	alumnos_aniadido = body.get("alumnos_aniadido", [])
+	print(f"Procesando alumnos_aniadido: {alumnos_aniadido}")
+	for idx, solicitud in enumerate(alumnos_aniadido):
+		print(f"Procesando alumnos_aniadido[{idx}]: {solicitud}")
+		try:
+			res = crear_solicitud_alumno(solicitud, db)
+			print(f"Resultado crear_solicitud_alumno: {res}")
+			resultados["alumnos_aniadido"].append(res)
+		except Exception as e:
+			print(f"Error en alumnos_aniadido[{idx}]: {e}")
+			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
+	# Procesar alumnos edición
+	alumnos_edicion = body.get("alumnos_edicion", [])
+	print(f"Procesando alumnos_edicion: {alumnos_edicion}")
+	for idx, solicitud in enumerate(alumnos_edicion):
+		print(f"Procesando alumnos_edicion[{idx}]: {solicitud}")
+		try:
+			res = crear_solicitud_alumno(solicitud, db)
+			print(f"Resultado crear_solicitud_alumno: {res}")
+			resultados["alumnos_edicion"].append(res)
+		except Exception as e:
+			print(f"Error en alumnos_edicion[{idx}]: {e}")
+			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
+	print(f"Resultados finales: {resultados}")
+	return resultados
+
