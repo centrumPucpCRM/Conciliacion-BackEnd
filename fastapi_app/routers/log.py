@@ -10,17 +10,8 @@ import fastapi_app.models.usuario
 
 router = APIRouter(prefix="/log", tags=["Log"])
 
-@router.get("/listar")
-def listar_logs_paginados(
-	page: int = Query(1, ge=1, description="Página a consultar"),
-	page_size: int = Query(20, ge=1, le=100, description="Cantidad de resultados por página"),
-	db: Session = Depends(get_db)
-):
-	offset = (page - 1) * page_size
-	logs_query = db.query(Log).order_by(Log.creadoEn.desc())
-	total = logs_query.count()
-	logs = logs_query.offset(offset).limit(page_size).all()
-
+def enrich_log_data(logs, db):
+	"""Helper function to enrich log data with related information"""
 	# Preload all tipos de solicitud
 	tipos_solicitud = db.query(fastapi_app.models.solicitud.TipoSolicitud).all()
 	tipos_dict = {ts.id: ts.nombre for ts in tipos_solicitud}
@@ -74,9 +65,35 @@ def listar_logs_paginados(
 			"oportunidad": oportunidad,
 			"programa": programa
 		})
+	return resultado
+
+@router.get("/listar")
+def listar_logs_paginados(
+	page: int = Query(1, ge=1),
+	size: int = Query(20, ge=1),
+	db: Session = Depends(get_db)
+):
+	"""Listar logs con paginación manual siguiendo el patrón de propuesta.py"""
+	# Query base
+	base_query = db.query(Log).order_by(Log.creadoEn.desc())
+	
+	# Calcular total y paginación
+	total = base_query.count()
+	offset = (page - 1) * size
+	
+	# Obtener logs paginados
+	logs = base_query.offset(offset).limit(size).all()
+	
+	# Enriquecer los datos de los logs
+	enriched_logs = enrich_log_data(logs, db)
+	
+	# Calcular páginas
+	pages = (total + size - 1) // size if size else 0
+	
 	return {
+		"items": enriched_logs,
 		"total": total,
 		"page": page,
-		"page_size": page_size,
-		"items": resultado
+		"size": size,
+		"pages": pages,
 	}
