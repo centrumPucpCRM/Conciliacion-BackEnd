@@ -183,7 +183,7 @@ def crear_solicitud_programa(body, db):
 	db.add(sxps)
 	db.commit()
 	if tipo_solicitud == "EXCLUSION_PROGRAMA":
-		programa.aperturadoPropuesta = False
+		programa.noAperturar = True
 		db.commit()
 	elif tipo_solicitud == "FECHA_CAMBIADA":
 		pass
@@ -201,7 +201,7 @@ def crear_solicitud_programa(body, db):
 			'abierta': solicitud.abierta,
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
 			'idPrograma': id_programa,
-			'aperturadoPropuesta': getattr(programa, 'aperturadoPropuesta', None),
+			'noAperturar': getattr(programa, 'noAperturar', None),
 			'tipo_solicitud': tipo_solicitud,
 		}
 	}

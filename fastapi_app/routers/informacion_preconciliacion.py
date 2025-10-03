@@ -192,6 +192,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "oportunidad_total_count": count_opty,
             "atipico": bool(atipico),
             "aperturado": bool(count_opty > p.puntoMinimoApertura),
+            "noAperturar": bool(p.noAperturar)
 
         })
         total_meta += p.metaDeVenta or 0

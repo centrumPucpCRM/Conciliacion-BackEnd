@@ -36,6 +36,7 @@ def listar_oportunidades(
 
     items = [
         {
+            "id": r.id,
             "documentoIdentidad": r.documentoIdentidad,
             "nombre": r.nombre,
             "descuento": r.descuento,
@@ -88,6 +89,7 @@ def listar_oportunidades_disponibles(
 
     items = [
         {
+            "id": r.id,
             "documentoIdentidad": r.documentoIdentidad,
             "nombre": r.nombre,
             "descuento": r.descuento,

@@ -26,4 +26,4 @@ class Programa(Base):
     tipoCambio = relationship('TipoCambio')
     fechaInaguracionPropuesta = Column(Date)
     mesPropuesto = Column(Integer)
-    aperturadoPropuesta = Column(Boolean,default=True)
+    noAperturar = Column(Boolean,default=False)
