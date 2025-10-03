@@ -40,8 +40,15 @@ def crear_solicitud_alumno(body, db):
 	if not programa:
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
 	id_propuesta = programa.idPropuesta
-	id_usuario_generador = programa.idJefeProducto
-
+	if (body.get("idUsuario") and tipo_solicitud == "EDICION_ALUMNO"):
+		if body.get("idUsuario")=="2":
+			id_usuario_generador = "1"
+		else :
+			id_usuario_generador = body.get("idUsuario")
+		id_usuario_receptor = programa.idJefeProducto
+	else:
+		id_usuario_generador = programa.idJefeProducto
+		id_usuario_receptor = "1" #El id del daf.supervisor
 	# Si es EDICION_ALUMNO, armar comentario especial
 	if tipo_solicitud == "EDICION_ALUMNO":
 		# Buscar el nombre del usuario generador usando el id_usuario_generador
@@ -49,18 +56,6 @@ def crear_solicitud_alumno(body, db):
 		nombre_usuario = usuario.nombre if usuario and hasattr(usuario, "nombre") else str(id_usuario_generador)
 		monto_propuesto = body.get("montoPropuesto")
 		comentario = f"Por solicitud de {nombre_usuario} se cambia el monto {monto} a un monto propuesto de {monto_propuesto}"
-
-	oportunidad = db.query(Oportunidad).filter_by(id=id_oportunidad).first()
-	if not oportunidad:
-		raise HTTPException(status_code=400, detail="Oportunidad no encontrada")
-	id_programa = oportunidad.idPrograma
-
-	# Obtener programa para idPropuesta y idUsuarioReceptor
-	programa = db.query(Programa).filter_by(id=id_programa).first()
-	if not programa:
-		raise HTTPException(status_code=400, detail="Programa no encontrado")
-	id_propuesta = programa.idPropuesta
-	id_usuario_generador = programa.idJefeProducto
 
 	# Obtener tipoSolicitud_id
 	tipo_solicitud_obj = db.query(TipoSolicitud).filter_by(nombre=tipo_solicitud).first()
@@ -75,8 +70,9 @@ def crear_solicitud_alumno(body, db):
 	valor_solicitud_id = valor_solicitud_obj.id
 
 	# Crear la solicitud
+
 	solicitud = SolicitudModel(
-		idUsuarioReceptor="1",#El id del daf.supervisor
+		idUsuarioReceptor=id_usuario_receptor,
 		idUsuarioGenerador=id_usuario_generador,
 		abierta=True,
 		tipoSolicitud_id=tipo_solicitud_id,
@@ -106,8 +102,8 @@ def crear_solicitud_alumno(body, db):
 			oportunidad.montoPropuesto = monto_propuesto
 			db.commit()
 	elif tipo_solicitud == "AGREGAR_ALUMNO":
-		# Cambiar el estado en etapaVentaPropuesta a "3.5 BecadoMatriculado"
-		oportunidad.etapaVentaPropuesta = "3.5 BecadoMatriculado"
+		# Cambiar el estado en etapaVentaPropuesta a "3 Matriculado"
+		oportunidad.etapaVentaPropuesta = "3 Matriculado"
 		oportunidad.fechaMatriculaPropuesta = datetime.now().date()
 		db.commit()
 
@@ -166,8 +162,8 @@ def crear_solicitud_programa(body, db):
 
 	# Crear la solicitud
 	solicitud = SolicitudModel(
-		idUsuarioReceptor="1",  # El id del daf.supervisor
-		idUsuarioGenerador=id_usuario_generador,
+		idUsuarioReceptor=id_usuario_generador,  # El id del daf.supervisor
+		idUsuarioGenerador="1",
 		abierta=True,
 		tipoSolicitud_id=tipo_solicitud_id,
 		valorSolicitud_id=valor_solicitud_id,
