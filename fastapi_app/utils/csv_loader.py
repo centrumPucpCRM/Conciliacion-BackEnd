@@ -172,7 +172,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             idTipoCambio=tipos_cambio_dict.get(moneda).id,
             cartera=row.get('cartera.nombre'),
             mes=mes,
-            mesPropuesto=mes
+            mesPropuesto=mes,
+            metaDeAlumnos=row.get('programa.meta_alumnos', 0)
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
@@ -271,7 +272,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     montoPropuesto=monto,
                     etapaVentaPropuesta=etapaDeVentas,
                     fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
-                    posibleAtipico=posibleAtipico
+                    posibleAtipico=posibleAtipico,
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad

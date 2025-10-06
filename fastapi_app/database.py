@@ -1,8 +1,5 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
-import os
-import pymysql
-import logging
 
 DATABASE_URL = "mysql+pymysql://root:jiAHcYHqrUaXpCQCHfJFgqRYAJahTJpG@nozomi.proxy.rlwy.net:53584/conciliacion"
 

@@ -14,6 +14,7 @@ class Programa(Base):
     moneda = Column(String(255))
     precioDeLista = Column(Float)
     metaDeVenta = Column(Float)
+    metaDeAlumnos = Column(Integer)
     puntoMinimoApertura = Column(Integer)
     subdireccion = Column(String(255))
     cartera = Column(String(255))

@@ -270,6 +270,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "moneda": p.moneda,
                 "precioDeLista": p.precioDeLista,
                 "metaDeVenta": p.metaDeVenta,
+                "metaDeAlumnos": p.metaDeAlumnos,
                 "puntoMinimoApertura": p.puntoMinimoApertura,
                 "subdireccion": p.subdireccion,
                 "cartera": p.cartera,
