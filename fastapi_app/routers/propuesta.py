@@ -18,6 +18,7 @@ def obtener_resumen_propuesta(
     propuesta = (
         db.query(Propuesta)
         .options(load_only(Propuesta.nombre, Propuesta.fechaPropuesta, Propuesta.horaPropuesta))
+        .join(Propuesta.estadoPropuesta)
         .filter(Propuesta.id == propuesta_id)
         .first()
     )
@@ -30,6 +31,7 @@ def obtener_resumen_propuesta(
         "nombre": propuesta.nombre,
         "fechaPropuesta": propuesta.fechaPropuesta,
         "horaPropuesta": propuesta.horaPropuesta,
+        "estadoPropuesta": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None,
     }
 
 
