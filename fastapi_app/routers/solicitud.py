@@ -90,10 +90,12 @@ def crear_solicitud_generica(
 			return crear_solicitud_alumno(body, db)
 		elif tipo_solicitud == "ELIMINACION_BECADO":
 			oportunidad.eliminado = True
+			oportunidad.montoPropuesto = 0
 			db.commit()
 			return {"msg": "Oportunidad marcada como eliminada", "idOportunidad": id_oportunidad}
 		elif tipo_solicitud == "ELIMINACION_BECADO_REVERTIR":
 			oportunidad.eliminado = False
+			oportunidad.montoPropuesto = oportunidad.monto
 			db.commit()
 			return {"msg": "Oportunidad revertida a no eliminada", "idOportunidad": id_oportunidad}
 		
@@ -177,7 +179,7 @@ def crear_solicitudes_lote(
 	body: dict = Body(...),
 	db: Session = Depends(get_db)
 ):
-	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "programas_eliminar": [], "errores": []}
+	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "programas_eliminar": [], "becas_eliminadas": [], "errores": []}
 	# Procesar alumnos añadidos
 	alumnos_aniadido = body.get("alumnos_aniadido", [])
 	print(f"Procesando alumnos_aniadido: {alumnos_aniadido}")
@@ -214,6 +216,32 @@ def crear_solicitudes_lote(
 		except Exception as e:
 			print(f"Error en programas_eliminar[{idx}]: {e}")
 			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
+	# Procesar becas eliminadas
+	becas_eliminadas = body.get("becas_eliminadas", [])
+	print(f"Procesando becas_eliminadas: {becas_eliminadas}")
+	for idx, item in enumerate(becas_eliminadas):
+		print(f"Procesando becas_eliminadas[{idx}]: {item}")
+		try:
+			id_oportunidad = item.get("idOportunidad")
+			if not id_oportunidad:
+				raise ValueError("Falta campo obligatorio: idOportunidad")
+			
+			oportunidad = db.query(Oportunidad).filter_by(id=id_oportunidad).first()
+			if not oportunidad:
+				raise ValueError(f"Oportunidad {id_oportunidad} no encontrada")
+			
+			oportunidad.eliminado = True
+			oportunidad.montoPropuesto = 0
+			db.commit()
+			
+			resultados["becas_eliminadas"].append({
+				"msg": "Oportunidad marcada como eliminada",
+				"idOportunidad": id_oportunidad
+			})
+			print(f"Oportunidad {id_oportunidad} marcada como eliminada")
+		except Exception as e:
+			print(f"Error en becas_eliminadas[{idx}]: {e}")
+			resultados["errores"].append({"item": item, "error": str(e)})
 	print(f"Resultados finales: {resultados}")
 	return resultados
 

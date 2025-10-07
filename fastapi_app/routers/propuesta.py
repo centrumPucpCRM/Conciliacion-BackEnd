@@ -150,7 +150,7 @@ def avanzar_estado_propuesta(
     
     # VALIDACIÓN FINAL: Verificar que TODAS las solicitudes del usuario DAF estén ACEPTADAS
     # Solo validar si el estado de la propuesta NO es "GENERADA"
-    if propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre != "GENERADA":
+    if propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre == "PRECONCILIADA":
         # Buscar usuarios con rol DAF - Supervisor
         usuarios_daf = db.query(Usuario).join(Usuario.roles).filter(
             Rol.nombre == "DAF - Supervisor"
