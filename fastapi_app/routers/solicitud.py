@@ -177,7 +177,7 @@ def crear_solicitudes_lote(
 	body: dict = Body(...),
 	db: Session = Depends(get_db)
 ):
-	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "errores": []}
+	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "programas_eliminar": [], "errores": []}
 	# Procesar alumnos añadidos
 	alumnos_aniadido = body.get("alumnos_aniadido", [])
 	print(f"Procesando alumnos_aniadido: {alumnos_aniadido}")
@@ -201,6 +201,18 @@ def crear_solicitudes_lote(
 			resultados["alumnos_edicion"].append(res)
 		except Exception as e:
 			print(f"Error en alumnos_edicion[{idx}]: {e}")
+			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
+	# Procesar programas eliminar
+	programas_eliminar = body.get("programas_eliminar", [])
+	print(f"Procesando programas_eliminar: {programas_eliminar}")
+	for idx, solicitud in enumerate(programas_eliminar):
+		print(f"Procesando programas_eliminar[{idx}]: {solicitud}")
+		try:
+			res = crear_solicitud_programa(solicitud, db)
+			print(f"Resultado crear_solicitud_programa: {res}")
+			resultados["programas_eliminar"].append(res)
+		except Exception as e:
+			print(f"Error en programas_eliminar[{idx}]: {e}")
 			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
 	print(f"Resultados finales: {resultados}")
 	return resultados

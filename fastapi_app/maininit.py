@@ -235,7 +235,8 @@ def crearPermisosPredeterminados():
         "BotonVerPuedeCancelarTodo",
         "TablaEditarGeneracion",
         "TablaEditarPreConciliacion",
-        "BotonAgregarAlumnoPreConciliacion"
+        "BotonAgregarAlumnoPreConciliacion",
+        "TablaVerNoAperturarGeneracion"
     ]
     db: Session = SessionLocal()
     try:
@@ -283,6 +284,7 @@ def crearRoles_x_PermisosPredeterminados():
             "BotonVerAprobacion",
             "BotonVerConciliacion",
             "TablaEditarGeneracion",
+            "TablaVerNoAperturarGeneracion"
         },
         "DAF - Supervisor": {
             "BotonCrearPropuesta",
@@ -291,6 +293,7 @@ def crearRoles_x_PermisosPredeterminados():
             "BotonVerAprobacion",
             "BotonVerConciliacion",
             "TablaEditarGeneracion",
+            "TablaVerNoAperturarGeneracion"
         },
     }
 
