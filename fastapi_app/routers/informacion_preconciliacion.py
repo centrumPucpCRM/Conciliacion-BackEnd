@@ -326,14 +326,38 @@ def obtener_informacion_preconciliacion(
     # Obtener la propuesta y su estado
     propuesta = db.query(Propuesta).get(id_propuesta)
     estado_generada = False
+    estado_propuesta_nombre = ""
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
-        estado_generada = propuesta.estadoPropuesta.nombre.strip().upper() == "GENERADA"
+        estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
+        estado_generada = estado_propuesta_nombre == "GENERADA"
 
+    # Obtener rol del usuario (cada usuario tiene máximo un rol)
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    rol_usuario = None
+    if usuario and usuario.roles:
+        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+    
     response = {
         # "carteras": carteras,
         "mes_conciliado": programas_mes_conciliado,
-        "meses_anteriores": programas_meses_anteriores
+        "meses_anteriores": programas_meses_anteriores,
     }
     if not estado_generada:
-        response["solicitudes"] = solicitudes   
+        response["solicitudes"] = solicitudes  
+    # verBotonPreconciliacion: Solo DAF Supervisor o DAF Subdirector cuando estado == GENERADA
+    if rol_usuario in ["DAF - Supervisor", "DAF - Subdirector"] and estado_generada:
+        response["verBotonPreconciliacion"] = True
+    
+    # verBotonAprobacionSubComercial: Solo Jefes de Producto
+    if rol_usuario == "Comercial - Jefe de producto":
+        response["verBotonAprobacionSubComercial"] = True
+        
+        # verBotonAprobacionBloqueadoSubComercial: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
+        solicitudes_jp = solicitudes.get("solicitudesPropuestaOportunidad", []) + solicitudes.get("solicitudesPropuestaPrograma", [])
+        if not solicitudes_jp or all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
+            response["verBotonAprobacionBloqueadoSubComercial"] = True
+    
+    #TODO:
+    #response["verBotonAprobacionDAF"] = True
+ 
     return response
