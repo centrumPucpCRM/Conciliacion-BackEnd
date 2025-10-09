@@ -150,18 +150,28 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     total_meta = 0
     total_monto = 0
     total_oportunidades = 0
-    # Obtener ids de alumnos y programas involucrados en solicitudes
+    # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
             alumnos_solicitudes.add(oportunidad["idOportunidad"])
     for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
     for p in programas_filtrados:
+        # Excluir programas con noAperturar = True
+        if p.noAperturar:
+            continue
+            
         oportunidades = oportunidades_por_programa.get(p.id, [])
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
         count_opty = len(oportunidades)
@@ -205,6 +215,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         "total_oportunidades": total_oportunidades,
         "size": len(items)
     }
+    print(items)
     return {"items": items, "totalizadores": totalizadores}
 def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)
@@ -222,14 +233,20 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
 
-    # Obtener ids de alumnos y programas involucrados en solicitudes
+    # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
             alumnos_solicitudes.add(oportunidad["idOportunidad"])
     for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        # NO considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
@@ -251,6 +268,10 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
             ).all()
         programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
         for p in programas_filtrados:
+            # Excluir programas con noAperturar = True
+            if p.noAperturar:
+                continue
+                
             oportunidades = oportunidades_por_programa.get(p.id, [])
             monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
             count_opty = len(oportunidades)

@@ -184,6 +184,7 @@ def crear_solicitud_programa(body, db):
 	db.commit()
 	if tipo_solicitud == "EXCLUSION_PROGRAMA":
 		programa.noAperturar = True
+		programa.noCalcular = True
 		db.commit()
 	elif tipo_solicitud == "FECHA_CAMBIADA":
 		pass
