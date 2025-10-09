@@ -197,7 +197,6 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "puntoMinimoApertura": p.puntoMinimoApertura,
             "subdireccion": p.subdireccion,
             "cartera": p.cartera,
-            "mes": p.mesPropuesto,
             "oportunidad_total_monto_propuesto": monto_opty,
             "metaDeAlumnos": p.metaDeAlumnos,
             "oportunidad_total_count": count_opty,
