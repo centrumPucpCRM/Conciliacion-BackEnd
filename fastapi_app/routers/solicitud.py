@@ -152,13 +152,8 @@ def editar_solicitud_generica(
 	),
 	db: Session = Depends(get_db)
 ):
-	print(body)
 	idSolicitud = body.get("idSolicitud")
-	print(idSolicitud)
 	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
-	print(solicitud)
-	print(solicitud.tipoSolicitud)
-	print(solicitud.tipoSolicitud.nombre)
 	tipo_solicitud = solicitud.tipoSolicitud.nombre
 
 	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO","ELIMINACION_BECADO_REVERTIR"]:
@@ -182,45 +177,31 @@ def crear_solicitudes_lote(
 	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "programas_eliminar": [], "becas_eliminadas": [], "errores": []}
 	# Procesar alumnos añadidos
 	alumnos_aniadido = body.get("alumnos_aniadido", [])
-	print(f"Procesando alumnos_aniadido: {alumnos_aniadido}")
 	for idx, solicitud in enumerate(alumnos_aniadido):
-		print(f"Procesando alumnos_aniadido[{idx}]: {solicitud}")
 		try:
 			res = crear_solicitud_alumno(solicitud, db)
-			print(f"Resultado crear_solicitud_alumno: {res}")
 			resultados["alumnos_aniadido"].append(res)
 		except Exception as e:
-			print(f"Error en alumnos_aniadido[{idx}]: {e}")
 			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
 	# Procesar alumnos edición
 	alumnos_edicion = body.get("alumnos_edicion", [])
-	print(f"Procesando alumnos_edicion: {alumnos_edicion}")
 	for idx, solicitud in enumerate(alumnos_edicion):
-		print(f"Procesando alumnos_edicion[{idx}]: {solicitud}")
 		try:
 			res = crear_solicitud_alumno(solicitud, db)
-			print(f"Resultado crear_solicitud_alumno: {res}")
 			resultados["alumnos_edicion"].append(res)
 		except Exception as e:
-			print(f"Error en alumnos_edicion[{idx}]: {e}")
 			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
 	# Procesar programas eliminar
 	programas_eliminar = body.get("programas_eliminar", [])
-	print(f"Procesando programas_eliminar: {programas_eliminar}")
 	for idx, solicitud in enumerate(programas_eliminar):
-		print(f"Procesando programas_eliminar[{idx}]: {solicitud}")
 		try:
 			res = crear_solicitud_programa(solicitud, db)
-			print(f"Resultado crear_solicitud_programa: {res}")
 			resultados["programas_eliminar"].append(res)
 		except Exception as e:
-			print(f"Error en programas_eliminar[{idx}]: {e}")
 			resultados["errores"].append({"solicitud": solicitud, "error": str(e)})
 	# Procesar becas eliminadas
 	becas_eliminadas = body.get("becas_eliminadas", [])
-	print(f"Procesando becas_eliminadas: {becas_eliminadas}")
 	for idx, item in enumerate(becas_eliminadas):
-		print(f"Procesando becas_eliminadas[{idx}]: {item}")
 		try:
 			id_oportunidad = item.get("idOportunidad")
 			if not id_oportunidad:
@@ -238,10 +219,8 @@ def crear_solicitudes_lote(
 				"msg": "Oportunidad marcada como eliminada",
 				"idOportunidad": id_oportunidad
 			})
-			print(f"Oportunidad {id_oportunidad} marcada como eliminada")
 		except Exception as e:
 			print(f"Error en becas_eliminadas[{idx}]: {e}")
 			resultados["errores"].append({"item": item, "error": str(e)})
-	print(f"Resultados finales: {resultados}")
 	return resultados
 

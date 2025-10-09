@@ -214,7 +214,6 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         "total_oportunidades": total_oportunidades,
         "size": len(items)
     }
-    print(items)
     return {"items": items, "totalizadores": totalizadores}
 def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)

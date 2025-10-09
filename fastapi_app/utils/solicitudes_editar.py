@@ -14,7 +14,6 @@ from fastapi import  HTTPException
 def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	valor_solicitud_nombre = body.get("valorSolicitud")
 	id_usuario_receptor = solicitud.idUsuarioReceptor
-	print(solicitud.valorSolicitud.nombre)
 	# Lógica especial cuando se acepta una solicitud previamente rechazada
 	if valor_solicitud_nombre == "ACEPTADO" and solicitud.valorSolicitud.nombre == "RECHAZADO":
 		# Caso 1: EXCLUSION_PROGRAMA - DAF supervisor aprueba apertura del programa
@@ -58,13 +57,11 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 		body["comentario"] = comentario_base + comentario_rechazo
 	
 	comentario = body.get("comentario")
-	print(comentario)
 	if comentario:
 		solicitud.comentario = comentario
 	solicitud.creadoEn = datetime.now()
 
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	print(valor_solicitud_obj.id)
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 
@@ -127,7 +124,6 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	solicitud.creadoEn = datetime.now()
 
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	print(valor_solicitud_obj.id)
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 

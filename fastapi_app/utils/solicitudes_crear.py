@@ -10,6 +10,8 @@ from fastapi_app.models.solicitud import TipoSolicitud, ValorSolicitud
 from datetime import datetime
 from fastapi import  HTTPException
 
+from fastapi_app.schemas import programa
+
 def crear_solicitud_alumno(body, db):
 	# Determinar tipo de solicitud antes de validar campos
 	tipo_solicitud = body.get("tipo_solicitud")
@@ -41,11 +43,12 @@ def crear_solicitud_alumno(body, db):
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
 	id_propuesta = programa.idPropuesta
 	if (body.get("idUsuario") and tipo_solicitud == "EDICION_ALUMNO"):
-		if body.get("idUsuario")=="2":
+		if body.get("idUsuario")=="2" or body.get("idUsuario")=="1":
 			id_usuario_generador = "1"
+			id_usuario_receptor = programa.idJefeProducto
 		else :
 			id_usuario_generador = body.get("idUsuario")
-		id_usuario_receptor = programa.idJefeProducto
+			id_usuario_receptor = "1"
 	else:
 		id_usuario_generador = programa.idJefeProducto
 		id_usuario_receptor = "1" #El id del daf.supervisor
@@ -187,7 +190,7 @@ def crear_solicitud_programa(body, db):
 		programa.noCalcular = True
 		db.commit()
 	elif tipo_solicitud == "FECHA_CAMBIADA":
-		pass
+		pass	
 
 	# Crear log de auditoría
 	log_data = {
