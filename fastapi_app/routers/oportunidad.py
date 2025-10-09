@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 
 from ..database import get_db
 from ..models.oportunidad import Oportunidad
-from ..models.solicitud import Solicitud as SolicitudModel
+from ..models.solicitud import Solicitud as SolicitudModel, ValorSolicitud
 from ..models.solicitud_x_oportunidad import SolicitudXOportunidad
 
 router = APIRouter(prefix="/oportunidad", tags=["Oportunidad"])
@@ -16,11 +16,14 @@ def obtener_oportunidades_con_solicitudes(
     db: Session
 ) -> set:
     """
-    Función interna que retorna un set con los IDs de oportunidades que tienen solicitudes asociadas.
+    Función interna que retorna un set con los IDs de oportunidades que tienen solicitudes NO ACEPTADAS asociadas.
     """
-    # Obtener todas las solicitudes del usuario y propuesta
-    solicitudes = db.query(SolicitudModel).filter(
-        SolicitudModel.idPropuesta == propuesta_id
+    # Obtener todas las solicitudes de la propuesta que NO están en estado ACEPTADO
+    solicitudes = db.query(SolicitudModel).join(
+        ValorSolicitud, SolicitudModel.valorSolicitud_id == ValorSolicitud.id
+    ).filter(
+        SolicitudModel.idPropuesta == propuesta_id,
+        ValorSolicitud.nombre != "ACEPTADO"
     ).all()
     
     if not solicitudes:
