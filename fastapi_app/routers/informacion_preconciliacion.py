@@ -355,6 +355,7 @@ def obtener_informacion_preconciliacion(
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
         estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
         estado_generada = estado_propuesta_nombre == "GENERADA"
+        estado_preconciliada = estado_propuesta_nombre == "PRECONCILIADA"
 
     # Obtener rol del usuario (cada usuario tiene máximo un rol)
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
@@ -386,5 +387,7 @@ def obtener_informacion_preconciliacion(
         solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
         if any(not s["abierta"] for s in solicitudes_aprobacion):
             response["verBotonAprobacionBloqueadoSubComercial"] = True
-    
+    if (rol_usuario == "DAF - Supervisor" or rol_usuario == "DAF - Subdirector") and estado_preconciliada:
+        response["noEditarBotonSolicitarCambio"] = True
+        
     return response
