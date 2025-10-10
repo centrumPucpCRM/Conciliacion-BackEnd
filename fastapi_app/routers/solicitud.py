@@ -255,7 +255,7 @@ def abrir_solicitudes_aprobacion_jp(
 	solicitudes_actualizadas = []
 	for solicitud in solicitudes:
 		if solicitud.tipoSolicitud and solicitud.tipoSolicitud.nombre == "APROBACION_JP":
-			solicitud.abierta = True
+			solicitud.abierta = False
 			solicitudes_actualizadas.append(solicitud.id)
 	
 	db.commit()
