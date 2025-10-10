@@ -224,3 +224,45 @@ def crear_solicitudes_lote(
 			resultados["errores"].append({"item": item, "error": str(e)})
 	return resultados
 
+
+@router.patch("/abrir-solicitudes-aprobacion-jp")
+def abrir_solicitudes_aprobacion_jp(
+	body: dict = Body(
+		...,
+		example={
+			"idUsuario": 7,
+			"idPropuesta": 1
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Abre todas las solicitudes de tipo APROBACION_JP para un usuario y propuesta.
+	Pone abierta=True en todas las solicitudes APROBACION_JP del usuario.
+	"""
+	id_usuario = body.get("idUsuario")
+	id_propuesta = body.get("idPropuesta")
+	
+	if not id_usuario or not id_propuesta:
+		return {"error": "Se requieren idUsuario e idPropuesta"}
+	
+	# Buscar todas las solicitudes APROBACION_JP del usuario para la propuesta
+	solicitudes = db.query(SolicitudModel).filter(
+		((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+		SolicitudModel.idPropuesta == id_propuesta
+	).all()
+	
+	solicitudes_actualizadas = []
+	for solicitud in solicitudes:
+		if solicitud.tipoSolicitud and solicitud.tipoSolicitud.nombre == "APROBACION_JP":
+			solicitud.abierta = True
+			solicitudes_actualizadas.append(solicitud.id)
+	
+	db.commit()
+	
+	return {
+		"msg": f"Se abrieron {len(solicitudes_actualizadas)} solicitudes de tipo APROBACION_JP",
+		"solicitudesAbiertas": solicitudes_actualizadas,
+		"idUsuario": id_usuario,
+		"idPropuesta": id_propuesta
+	}
