@@ -67,9 +67,12 @@ def cargar_usuarios(db, df, carteras_dict):
     for un in nombres:
         u = existentes_dict.get(un)
         if not u:
+            # Generar contraseña basada en el nombre (sin espacios, igual que el correo pero sin @ejemplo.com)
+            password = str(un).replace(' ', '.')
             u = Usuario(
-                nombre=un,
-                correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
+                nombre=password,
+                correo=f"{password}@ejemplo.com",
+                clave=password,
                 activo=True
             )
             db.add(u)
