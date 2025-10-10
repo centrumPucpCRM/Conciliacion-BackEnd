@@ -29,6 +29,31 @@ from fastapi_app.models.cartera import Cartera
 #         }
 #         for c in carteras
 #     ]
+
+
+def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Session):
+    """
+    Obtiene solicitudes de tipo APROBACION_JP para un usuario y propuesta.
+    Retorna lista de solicitudes con su estado abierta (bool).
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        SolicitudModel.idPropuesta == id_propuesta
+    ).all()
+    
+    solicitudes_aprobacion_jp = []
+    for s in solicitudes:
+        if s.tipoSolicitud and s.tipoSolicitud.nombre == "APROBACION_JP":
+            solicitudes_aprobacion_jp.append({
+                "id": s.id,
+                "abierta": s.abierta,
+                "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+                "comentario": s.comentario,
+                "creadoEn": s.creadoEn
+            })
+    
+    return solicitudes_aprobacion_jp
+
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     if id_usuario == 2: 
         id_usuario = 1
@@ -150,18 +175,28 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     total_meta = 0
     total_monto = 0
     total_oportunidades = 0
-    # Obtener ids de alumnos y programas involucrados en solicitudes
+    # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
             alumnos_solicitudes.add(oportunidad["idOportunidad"])
     for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
     for p in programas_filtrados:
+        # Excluir programas con noAperturar = True
+        if p.noAperturar:
+            continue
+            
         oportunidades = oportunidades_por_programa.get(p.id, [])
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
         count_opty = len(oportunidades)
@@ -187,12 +222,11 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "puntoMinimoApertura": p.puntoMinimoApertura,
             "subdireccion": p.subdireccion,
             "cartera": p.cartera,
-            "mes": p.mesPropuesto,
             "oportunidad_total_monto_propuesto": monto_opty,
             "metaDeAlumnos": p.metaDeAlumnos,
             "oportunidad_total_count": count_opty,
             "atipico": bool(atipico),
-            "aperturado": bool(count_opty > p.puntoMinimoApertura),
+            "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
             "noAperturar": bool(p.noAperturar)
 
         })
@@ -222,14 +256,20 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
 
-    # Obtener ids de alumnos y programas involucrados en solicitudes
+    # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
+        # No considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         oportunidad = s.get("oportunidad")
         if oportunidad and oportunidad.get("idOportunidad"):
             alumnos_solicitudes.add(oportunidad["idOportunidad"])
     for s in solicitudes.get("solicitudesPropuestaPrograma", []):
+        # NO considerar solicitudes ACEPTADAS
+        if s.get("valorSolicitud") == "ACEPTADO":
+            continue
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
@@ -251,6 +291,10 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
             ).all()
         programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
         for p in programas_filtrados:
+            # Excluir programas con noAperturar = True
+            if p.noAperturar:
+                continue
+                
             oportunidades = oportunidades_por_programa.get(p.id, [])
             monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
             count_opty = len(oportunidades)
@@ -279,7 +323,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "oportunidad_total_monto_propuesto": monto_opty,
                 "oportunidad_total_count": count_opty,
                 "atipico": atipico,
-                "aperturado": count_opty > p.puntoMinimoApertura,
+                "enRiesgo": bool(count_opty < p.puntoMinimoApertura)
             })
             total_meta += p.metaDeVenta or 0
             total_monto += monto_opty
@@ -307,14 +351,40 @@ def obtener_informacion_preconciliacion(
     # Obtener la propuesta y su estado
     propuesta = db.query(Propuesta).get(id_propuesta)
     estado_generada = False
+    estado_propuesta_nombre = ""
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
-        estado_generada = propuesta.estadoPropuesta.nombre.strip().upper() == "GENERADA"
+        estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
+        estado_generada = estado_propuesta_nombre == "GENERADA"
 
+    # Obtener rol del usuario (cada usuario tiene máximo un rol)
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    rol_usuario = None
+    if usuario and usuario.roles:
+        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+    
     response = {
         # "carteras": carteras,
         "mes_conciliado": programas_mes_conciliado,
-        "meses_anteriores": programas_meses_anteriores
+        "meses_anteriores": programas_meses_anteriores,
     }
     if not estado_generada:
-        response["solicitudes"] = solicitudes   
+        response["solicitudes"] = solicitudes  
+    # verBotonPreconciliacion: Solo DAF Supervisor o DAF Subdirector cuando estado == GENERADA
+    if rol_usuario in ["DAF - Supervisor", "DAF - Subdirector"] and estado_generada:
+        response["verBotonPreconciliacion"] = True
+    
+    # verBotonAprobacionSubComercial: Solo Jefes de Producto
+    if rol_usuario == "Comercial - Jefe de producto":
+        response["verBotonAprobacionSubComercial"] = True
+        
+        # verBotonAprobacionFinalizar: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
+        solicitudes_jp = solicitudes.get("solicitudesPropuestaOportunidad", []) + solicitudes.get("solicitudesPropuestaPrograma", [])
+        if not solicitudes_jp or all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
+            response["verBotonAprobacionFinalizar"] = True
+        
+        # verBotonAprobacionBloqueadoSubComercial: Si existe una solicitud APROBACION_JP cerrada (abierta=False)
+        solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+        if any(not s["abierta"] for s in solicitudes_aprobacion):
+            response["verBotonAprobacionBloqueadoSubComercial"] = True
+    
     return response

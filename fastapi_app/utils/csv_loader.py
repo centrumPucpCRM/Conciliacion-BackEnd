@@ -67,9 +67,12 @@ def cargar_usuarios(db, df, carteras_dict):
     for un in nombres:
         u = existentes_dict.get(un)
         if not u:
+            # Generar contraseña basada en el nombre (sin espacios, igual que el correo pero sin @ejemplo.com)
+            password = str(un).replace(' ', '.')
             u = Usuario(
-                nombre=un,
-                correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
+                nombre=password,
+                correo=f"{password}@ejemplo.com",
+                clave=password,
                 activo=True
             )
             db.add(u)
@@ -231,7 +234,6 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
         cond3 = len(decimales_ratio) == 2 and len(decimales_ratio[1]) > 2 and decimales_ratio[1][2:] != '00'
         atipicos.append(cond1 or cond2 or cond3)
     df['oportunidad.posibleAtipico'] = atipicos
-    print(df['oportunidad.posibleAtipico'].value_counts())
     oportunidades_bulk = []
     oportunidades_dict = {}
     propuesta_id = propuesta_unica.id
@@ -430,7 +432,6 @@ def cargar_csv(data):
     fecha = data.get("fechaDatos")
     hora = data.get("horaDatos")
     csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "+" + hora + ".csv"
-    print(csv_url)
     df = pd.read_csv(csv_url, decimal=',')
     if df is None or df.empty:
         raise HTTPException(status_code=400, detail="El archivo CSV no contiene registros para procesar")
@@ -517,10 +518,7 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         # 7. Commit final para guardar todo lo demás
         db.commit()
         total_time = time.time() - total_start
-        print(f"Tiempo total de ejecución: {total_time:.4f} segundos")
-        
-        
-        
+        print(f"\n=== TIEMPO TOTAL: {total_time:.4f} segundos ===\n")        
         
         return {
             "status": "success",

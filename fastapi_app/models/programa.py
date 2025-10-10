@@ -28,3 +28,4 @@ class Programa(Base):
     fechaInaguracionPropuesta = Column(Date)
     mesPropuesto = Column(Integer)
     noAperturar = Column(Boolean,default=False)
+    noCalcular = Column(Boolean,default=False)

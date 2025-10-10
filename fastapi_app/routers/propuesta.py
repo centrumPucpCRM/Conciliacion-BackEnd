@@ -116,7 +116,6 @@ def avanzar_estado_propuesta(
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     # Verificar roles del usuario
     roles_usuario = [rol.nombre for rol in usuario.roles]
-    print(f"Roles del usuario {id_usuario}: {roles_usuario}")
     
     # Si el usuario es JP (no es DAF)
     if "daf.supervisor" not in roles_usuario:
@@ -138,7 +137,6 @@ def avanzar_estado_propuesta(
             todas_aceptadas = all(solicitud.valorSolicitud.nombre == "ACEPTADO" for solicitud in solicitudes_usuario)
             
             if todas_aceptadas:
-                print(f"Usuario JP: TODAS las {len(solicitudes_usuario)} solicitud(es) (excepto APROBACION_JP) están aceptadas. Cerrando todas.")
                 # Cerrar todas las solicitudes
                 for solicitud in solicitudes_usuario:
                     solicitud.abierta = False
@@ -155,12 +153,9 @@ def avanzar_estado_propuesta(
         usuarios_daf = db.query(Usuario).join(Usuario.roles).filter(
             Rol.nombre == "DAF - Supervisor"
         ).all()
-        print(f"Usuarios con rol DAF encontrados: {[u.nombre for u in usuarios_daf]}")
         if usuarios_daf:
             # Verificar si algún usuario DAF tiene solicitudes que NO están aceptadas
             for usuario_daf in usuarios_daf:
-                print(f"Usuario DAF encontrado: {usuario_daf.id}")
-                print(f"Propuesta ID: {propuesta_id}")
                 # Buscar TODAS las solicitudes abiertas del usuario DAF para esta propuesta
                 solicitudes_daf = db.query(SolicitudModel).join(ValorSolicitud).filter(
                     or_(
@@ -169,7 +164,6 @@ def avanzar_estado_propuesta(
                     ),
                     SolicitudModel.idPropuesta == propuesta_id,
                 ).all()
-                print(f"Solicitudes DAF encontradas: {solicitudes_daf}")
                 if solicitudes_daf:
                     # Verificar que TODAS estén en estado ACEPTADO
                     todas_aceptadas_daf = all(solicitud.valorSolicitud.nombre == "ACEPTADO" for solicitud in solicitudes_daf)
@@ -180,7 +174,6 @@ def avanzar_estado_propuesta(
                         return {
                             "msg": f"No se puede avanzar el estado. El usuario DAF '{usuario_daf.nombre}' tiene {len(no_aceptadas)} solicitud(es) que NO están aceptadas. Todas deben estar en estado ACEPTADO."
                         }
-                    print(f"Usuario DAF '{usuario_daf.nombre}': TODAS las {len(solicitudes_daf)} solicitud(es) están aceptadas")
         print(f"Validación final pasada: todos los usuarios DAF tienen todas sus solicitudes aceptadas")
     else:
         print(f"Estado de propuesta es GENERADA, se omite validación de solicitudes DAF")
