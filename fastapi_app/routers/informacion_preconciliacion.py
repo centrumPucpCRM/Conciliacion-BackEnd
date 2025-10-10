@@ -29,6 +29,31 @@ from fastapi_app.models.cartera import Cartera
 #         }
 #         for c in carteras
 #     ]
+
+
+def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Session):
+    """
+    Obtiene solicitudes de tipo APROBACION_JP para un usuario y propuesta.
+    Retorna lista de solicitudes con su estado abierta (bool).
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        SolicitudModel.idPropuesta == id_propuesta
+    ).all()
+    
+    solicitudes_aprobacion_jp = []
+    for s in solicitudes:
+        if s.tipoSolicitud and s.tipoSolicitud.nombre == "APROBACION_JP":
+            solicitudes_aprobacion_jp.append({
+                "id": s.id,
+                "abierta": s.abierta,
+                "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+                "comentario": s.comentario,
+                "creadoEn": s.creadoEn
+            })
+    
+    return solicitudes_aprobacion_jp
+
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     if id_usuario == 2: 
         id_usuario = 1
@@ -352,12 +377,14 @@ def obtener_informacion_preconciliacion(
     if rol_usuario == "Comercial - Jefe de producto":
         response["verBotonAprobacionSubComercial"] = True
         
-        # verBotonAprobacionBloqueadoSubComercial: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
+        # verBotonAprobacionFinalizar: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
         solicitudes_jp = solicitudes.get("solicitudesPropuestaOportunidad", []) + solicitudes.get("solicitudesPropuestaPrograma", [])
         if not solicitudes_jp or all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
+            response["verBotonAprobacionFinalizar"] = True
+        
+        # verBotonAprobacionBloqueadoSubComercial: Si existe una solicitud APROBACION_JP cerrada (abierta=False)
+        solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+        if any(not s["abierta"] for s in solicitudes_aprobacion):
             response["verBotonAprobacionBloqueadoSubComercial"] = True
     
-    #TODO:
-    #response["verBotonAprobacionDAF"] = True
- 
     return response
