@@ -34,6 +34,7 @@ def crear_solicitud_alumno(body, db):
 	oportunidad = db.query(Oportunidad).filter_by(id=id_oportunidad).first()
 	if not oportunidad:
 		raise HTTPException(status_code=400, detail="Oportunidad no encontrada")
+	
 	id_programa = oportunidad.idPrograma
 	monto = oportunidad.monto
 
@@ -41,9 +42,11 @@ def crear_solicitud_alumno(body, db):
 	programa = db.query(Programa).filter_by(id=id_programa).first()
 	if not programa:
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
+	
 	id_propuesta = programa.idPropuesta
+	
 	if (body.get("idUsuario") and tipo_solicitud == "EDICION_ALUMNO"):
-		if body.get("idUsuario")=="2" or body.get("idUsuario")=="1":
+		if str(body.get("idUsuario"))=="2" or str(body.get("idUsuario"))=="1":
 			id_usuario_generador = "1"
 			id_usuario_receptor = programa.idJefeProducto
 		else :
@@ -52,6 +55,7 @@ def crear_solicitud_alumno(body, db):
 	else:
 		id_usuario_generador = programa.idJefeProducto
 		id_usuario_receptor = "1" #El id del daf.supervisor
+	
 	# Si es EDICION_ALUMNO, armar comentario especial
 	if tipo_solicitud == "EDICION_ALUMNO":
 		# Buscar el nombre del usuario generador usando el id_usuario_generador
@@ -73,7 +77,6 @@ def crear_solicitud_alumno(body, db):
 	valor_solicitud_id = valor_solicitud_obj.id
 
 	# Crear la solicitud
-
 	solicitud = SolicitudModel(
 		idUsuarioReceptor=id_usuario_receptor,
 		idUsuarioGenerador=id_usuario_generador,
@@ -147,6 +150,7 @@ def crear_solicitud_programa(body, db):
 	programa = db.query(Programa).filter_by(id=id_programa).first()
 	if not programa:
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
+	
 	id_propuesta = programa.idPropuesta
 	id_usuario_generador = programa.idJefeProducto
 
@@ -185,6 +189,7 @@ def crear_solicitud_programa(body, db):
 	)
 	db.add(sxps)
 	db.commit()
+	
 	if tipo_solicitud == "EXCLUSION_PROGRAMA":
 		programa.noAperturar = True
 		programa.noCalcular = True

@@ -67,11 +67,10 @@ def cargar_usuarios(db, df, carteras_dict):
     for un in nombres:
         u = existentes_dict.get(un)
         if not u:
-            nombrepunto=str(un).replace(' ', '.')
             u = Usuario(
-                nombre=nombrepunto,
-                clave=nombrepunto,
-                correo=nombrepunto + "@ejemplo.com",
+                nombre=un,
+                clave= str(un).replace(' ', '.'),
+                correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
                 activo=True
             )
             db.add(u)
@@ -318,8 +317,20 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     solicitudes_bulk = []
     logs_bulk = []
     receptor_usuario = usuarios_por_nombre.get('daf.subdirector')
+    
+    # Validar que el receptor existe
+    if not receptor_usuario:
+        print(f"[WARNING] Usuario 'daf.subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
+        return
+    
     for jefe_nombre in subdirector_jefe_nombres:
         generador_usuario = usuarios_por_nombre.get(jefe_nombre.strip().lower())
+        
+        # Validar que el generador existe
+        if not generador_usuario:
+            print(f"[WARNING] Usuario '{jefe_nombre}' no encontrado. Saltando solicitud.")
+            continue
+            
         comentario = f"Solicitud de {generador_usuario.nombre} para revision"
         nueva_solicitud = Solicitud(
             idUsuarioGenerador=generador_usuario.id,
@@ -378,7 +389,23 @@ def crear_solicitudes_Jp(db, df, propuesta_unica):
         subdireccion = str(row.get('programa.subdireccion', '')).strip()
         usuario = usuarios_por_nombre.get(usuario_nombre)
         jefe_nombre = subdireccion_jefe_map.get(subdireccion)
+        
+        # Validar que el usuario existe
+        if not usuario:
+            print(f"[WARNING] Usuario '{usuario_nombre}' no encontrado. Saltando solicitud.")
+            continue
+        
+        # Validar que el jefe existe
+        if not jefe_nombre:
+            print(f"[WARNING] No hay jefe asignado para subdirección '{subdireccion}'. Saltando solicitud.")
+            continue
+            
         jefe_usuario = usuarios_por_nombre.get(jefe_nombre.strip().lower())
+        
+        if not jefe_usuario:
+            print(f"[WARNING] Jefe '{jefe_nombre}' no encontrado. Saltando solicitud.")
+            continue
+        
         comentario = f"Solicitud de {usuario.nombre}  para la subdirección '{subdireccion}'."
         nueva_solicitud = Solicitud(
             idUsuarioGenerador=usuario.id,
