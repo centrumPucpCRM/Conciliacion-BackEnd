@@ -520,8 +520,8 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "status": "success",
             "message": "CSV procesado con éxito",
-            "propuesta_id": propuesta_unica.id,
-            "propuesta_nombre": propuesta_unica.nombre,
+            "propuesta_id": "asdas",
+            "propuesta_nombre": "sadsad",
             "timings": timings,
             "total_time": total_time
         }
