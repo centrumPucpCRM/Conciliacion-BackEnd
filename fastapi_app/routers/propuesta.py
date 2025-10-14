@@ -46,6 +46,7 @@ def listar_propuestas(
     size: int = Query(50, ge=1),
     fechaDesde: str = Query(None, description="Fecha desde (YYYY-MM-DD)", alias="fechaDesde"),
     fechaHasta: str = Query(None, description="Fecha hasta (YYYY-MM-DD)", alias="fechaHasta"),
+    nombre: str = Query(None, description="Filtrar por nombre de propuesta (búsqueda parcial)", alias="nombre"),
     db: Session = Depends(get_db),
 ):
     # Query base con carga de relaciones necesarias
@@ -68,6 +69,10 @@ def listar_propuestas(
             base_query = base_query.filter(Propuesta.fechaPropuesta <= fecha_hasta_dt)
         except Exception:
             pass
+    
+    # Filtrado por nombre
+    if nombre:
+        base_query = base_query.filter(Propuesta.nombre.ilike(f"%{nombre}%"))
 
     total = base_query.count()
     offset = (page - 1) * size
