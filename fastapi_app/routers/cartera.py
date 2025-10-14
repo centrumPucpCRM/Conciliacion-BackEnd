@@ -105,7 +105,7 @@ def obtener_cartera_year():
 @router.get("/listar")
 def listar_carteras():
     """
-    Devuelve todas las carteras y mes desde el reporte SOAP.
+    Devuelve todas las carteras y año desde el reporte SOAP.
     """
     items = obtener_cartera_year()
     return {"items": items}
