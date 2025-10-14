@@ -9,6 +9,7 @@ from .routers import usuario as usuario_router, cartera, oportunidad, tipo_cambi
 from .routers import csv_loader
 from .routers import dashboard
 from .routers import informacion_preconciliacion
+from .routers import rol as rol_router
 
 
 # Configura logging para mostrar en consola
@@ -49,10 +50,9 @@ app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
 # app.include_router(conciliacion.router)
 app.include_router(propuesta.router)
-# app.include_router(programa.router)
+app.include_router(programa.router)
 app.include_router(solicitud.router)
 # app.include_router(log.router)
-from .routers import rol as rol_router
 app.include_router(rol_router.router)
 app.include_router(csv_loader.router, tags=["CSV Loader"])
 app.include_router(dashboard.router)

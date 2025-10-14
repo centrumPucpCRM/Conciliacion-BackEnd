@@ -18,6 +18,7 @@ class Programa(Base):
     puntoMinimoApertura = Column(Integer)
     subdireccion = Column(String(255))
     cartera = Column(String(255))
+    comentario = Column(String(255))
     mes = Column(Integer)
     idPropuesta = Column(Integer, ForeignKey('propuesta.id'))
     propuesta = relationship('Propuesta')

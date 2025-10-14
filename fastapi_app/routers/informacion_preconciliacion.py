@@ -227,7 +227,8 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "oportunidad_total_count": count_opty,
             "atipico": bool(atipico),
             "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
-            "noAperturar": bool(p.noAperturar)
+            "noAperturar": bool(p.noAperturar),
+            "comentario": p.comentario
 
         })
         total_meta += p.metaDeVenta or 0
@@ -323,7 +324,8 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "oportunidad_total_monto_propuesto": monto_opty,
                 "oportunidad_total_count": count_opty,
                 "atipico": atipico,
-                "enRiesgo": bool(count_opty < p.puntoMinimoApertura)
+                "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
+                "comentario": p.comentario
             })
             total_meta += p.metaDeVenta or 0
             total_monto += monto_opty
