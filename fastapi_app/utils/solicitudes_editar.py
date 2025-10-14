@@ -55,7 +55,7 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 		# Agregar el comentario de rechazo
 		comentario_base = body.get("comentario", "")
 		body["comentario"] = comentario_base + comentario_rechazo
-	
+	#
 	comentario = body.get("comentario")
 	if comentario:
 		solicitud.comentario = comentario
