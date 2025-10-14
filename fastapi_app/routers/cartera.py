@@ -24,7 +24,7 @@ def read_session_id_from_s3():
         print(f"Error al leer desde el link: {e}")
         return None
 
-def obtener_cartera_mes():
+def obtener_cartera_year():
     REPORT_PATH = '/shared/Custom/Reportes CENTRUM/Marketing/Dashboard Ventas/Andre/Soap Conciliacion/Operativo - Productos'
     session_id = str(read_session_id_from_s3())
     NAMESPACES = {
@@ -72,12 +72,31 @@ def obtener_cartera_mes():
             return []
         filas = re.findall(r'<Row>(.*?)</Row>', query_result, re.DOTALL)
         resultado = []
+        carteras_vistas = set()  # Para trackear carteras únicas
+        
         for fila_xml in filas:
             columnas = re.findall(r'<Column\d+>(.*?)</Column\d+>', fila_xml, re.DOTALL)
             if len(columnas) >= 2:
                 cartera = columnas[0]
-                mes = columnas[1]
-                resultado.append({"id": f"{cartera}-{mes}", "cartera": cartera, "mes": mes})
+                year = columnas[1]
+                
+                # Extraer el año del mes (asumiendo formato YYYY-MM o similar)
+                try:
+                    # Intentar extraer año del formato de mes
+                    año_match = re.search(r'(\d{4})', year)
+                    if año_match:
+                        año = int(año_match.group(1))
+                        # Filtrar solo años 2024 y 2025
+                        if año not in [2024, 2025]:
+                            continue
+                except:
+                    pass  # Si no se puede extraer el año, incluir el registro
+                
+                # Solo agregar si la cartera no ha sido vista antes
+                if cartera not in carteras_vistas:
+                    carteras_vistas.add(cartera)
+                    resultado.append({"id": f"{cartera}-{year}", "cartera": cartera, "year": year})
+
         return resultado
     except Exception as e:
         print(f"Error SOAP cartera-mes: {e}")
@@ -88,7 +107,7 @@ def listar_carteras():
     """
     Devuelve todas las carteras y mes desde el reporte SOAP.
     """
-    items = obtener_cartera_mes()
+    items = obtener_cartera_year()
     return {"items": items}
 
 #TODO: Eliminar el user_id cuando se implemente el token
