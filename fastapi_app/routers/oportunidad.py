@@ -59,6 +59,7 @@ def listar_oportunidades(
     programa_id: int = Query(..., alias="programa_id"),
     page: int = Query(1, ge=1),
     size: int = Query(50, ge=1, le=1000),
+    nombre: str = Query(None, description="Filtrar por nombre del alumno (búsqueda parcial)", alias="nombre"),
     db: Session = Depends(get_db),
 ):
     """
@@ -73,6 +74,10 @@ def listar_oportunidades(
         .filter((Oportunidad.eliminado == False) | (Oportunidad.eliminado.is_(None)))
         .filter(~Oportunidad.etapaVentaPropuesta.in_(etapas_excluir))
     )
+    
+    # Filtrado por nombre del alumno
+    if nombre:
+        query = query.filter(Oportunidad.nombre.ilike(f"%{nombre}%"))
 
     total = query.count()
     offset = (page - 1) * size
