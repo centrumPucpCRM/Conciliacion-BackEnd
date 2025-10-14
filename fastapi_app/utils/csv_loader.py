@@ -67,9 +67,11 @@ def cargar_usuarios(db, df, carteras_dict):
     for un in nombres:
         u = existentes_dict.get(un)
         if not u:
+            nombrepunto=str(un).replace(' ', '.')
             u = Usuario(
-                nombre=un,
-                correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
+                nombre=nombrepunto,
+                clave=nombrepunto,
+                correo=nombrepunto + "@ejemplo.com",
                 activo=True
             )
             db.add(u)
