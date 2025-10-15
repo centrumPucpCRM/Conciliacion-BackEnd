@@ -1,10 +1,13 @@
+"""
+Router para gestión de subdirecciones.
+Expone los endpoints relacionados con subdirecciones y permisos de usuarios.
+"""
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import distinct
 
 from ..database import get_db
-from ..models.programa import Programa
-from ..models.usuario import Usuario
+from ..services.sub_direccion_service import SubDireccionService
 
 router = APIRouter(prefix="/sub-direccion", tags=["Sub-Dirección"])
 
@@ -16,26 +19,27 @@ def listar_por_usuario(
 ):
     """
     Lista las subdirecciones únicas asociadas a un usuario específico.
-    El usuario debe ser jefe de producto de al menos un programa.
+    
+    Sistema de permisos en 3 niveles:
+    - Nivel 1: Usuarios con acceso total (admin, daf.supervisor, daf.subdirector)
+      ven todas las subdirecciones del sistema.
+    - Nivel 2: Usuarios con subdirecciones específicas (Jefe grado, Jefe ee, Jefe CentrumX)
+      ven solo sus subdirecciones asignadas.
+    - Nivel 3: Otros usuarios ven subdirecciones donde son jefes de producto.
+    
+    Args:
+        user_id: ID del usuario
+        db: Sesión de base de datos
+        
+    Returns:
+        Dict con formato: {"items": [{"sub-direccion": "nombre"}, ...]}
     """
-    # Obtener subdirecciones únicas donde el usuario es jefe de producto
-    subdirecciones = (
-        db.query(distinct(Programa.subdireccion))
-        .filter(Programa.idJefeProducto == user_id)
-        .filter(Programa.subdireccion.isnot(None))
-        .order_by(Programa.subdireccion)
-        .all()
-    )
+    # Inicializar servicio
+    service = SubDireccionService(db)
     
-    # Construir la respuesta con subdirecciones únicas
-    items = [
-        {
-            "sub-direccion": subdir[0]
-        }
-        for subdir in subdirecciones
-    ]
+    # Obtener subdirecciones según permisos del usuario
+    subdirecciones = service.obtener_subdirecciones_por_usuario(user_id)
     
-    return {
-        "items": items
-    }
+    # Formatear y retornar respuesta
+    return service.formatear_respuesta(subdirecciones)
 
