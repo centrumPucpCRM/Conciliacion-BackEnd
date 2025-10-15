@@ -10,6 +10,7 @@ from .routers import csv_loader
 from .routers import dashboard
 from .routers import informacion_preconciliacion
 from .routers import rol as rol_router
+from .routers import sub_direccion
 
 
 # Configura logging para mostrar en consola
@@ -58,6 +59,7 @@ app.include_router(csv_loader.router, tags=["CSV Loader"])
 app.include_router(dashboard.router)
 app.include_router(informacion_preconciliacion.router)
 app.include_router(log.router)
+app.include_router(sub_direccion.router)
 # app.include_router(roles_usuarios_carteras.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
