@@ -162,3 +162,114 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 
 	db.commit()
 	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
+
+def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
+	"""
+	Acepta o rechaza una solicitud de tipo FECHA_CAMBIADA.
+	
+	Lógica:
+	- ACEPTAR: Se acepta la fecha propuesta (fechaInaguracionPropuesta o fechaInaguracionObjetada si existe)
+	  y se actualiza el programa con esa fecha.
+	- RECHAZAR: Se intercambian roles, se propone una nueva fecha que pasa a ser fechaInaguracionObjetada
+	  (o se intercambian las fechas si ya existe una objetada).
+	"""
+	valor_solicitud_nombre = body.get("valorSolicitud")
+	
+	# Buscar la relación SolicitudXPrograma
+	sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
+	if not sxp:
+		raise HTTPException(status_code=400, detail="No se encontró la relación solicitud-programa")
+	
+	# Obtener el programa
+	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+	if not programa:
+		raise HTTPException(status_code=400, detail="Programa no encontrado")
+	
+	# Si se RECHAZA, intercambiar generador y receptor y manejar fechas
+	if valor_solicitud_nombre == "RECHAZADO":
+		# Intercambiar roles
+		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
+		
+		# Obtener la nueva fecha propuesta del body (obligatoria al rechazar)
+		nueva_fecha_objetada = body.get("fechaInaguracionPropuesta")
+		if not nueva_fecha_objetada:
+			raise HTTPException(status_code=400, detail="Debe proporcionar una fecha al rechazar (fechaInaguracionPropuesta)")
+		
+		# Manejar intercambio de fechas
+		if sxp.fechaInaguracionObjetada:
+			# Ya había una fecha objetada, intercambiar
+			sxp.fechaInaguracionPropuesta = sxp.fechaInaguracionObjetada
+			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
+		else:
+			# Primera vez que se rechaza, la fecha propuesta pasa a objetada
+			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
+	
+	# Si se ACEPTA, aplicar la fecha al programa
+	elif valor_solicitud_nombre == "ACEPTADO":
+		# Si hay fecha objetada, aceptamos esa (es la última propuesta)
+		# Si no, aceptamos la fecha propuesta original
+		fecha_a_aplicar = sxp.fechaInaguracionObjetada if sxp.fechaInaguracionObjetada else sxp.fechaInaguracionPropuesta
+		
+		if fecha_a_aplicar:
+			programa.fechaInaguracionPropuesta = fecha_a_aplicar
+	
+	# Construir comentario
+	comentario = body.get("comentario", "")
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	nombre_generador = usuario_generador.nombre if usuario_generador else "-"
+	nombre_receptor = usuario_receptor.nombre if usuario_receptor else "-"
+	
+	if comentario:
+		solicitud.comentario = (
+			comentario
+			+ f"\nFecha Propuesta por {nombre_receptor}: {sxp.fechaInaguracionPropuesta}"
+		)
+		if sxp.fechaInaguracionObjetada:
+			solicitud.comentario += f"\nFecha Objetada por {nombre_generador}: {sxp.fechaInaguracionObjetada}"
+	
+	solicitud.creadoEn = datetime.now()
+	
+	# Actualizar valor de solicitud
+	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
+	if not valor_solicitud_obj:
+		raise HTTPException(status_code=400, detail=f"ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
+	
+	solicitud.valorSolicitud = valor_solicitud_obj
+	solicitud.valorSolicitud_id = valor_solicitud_obj.id
+	
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'nombreUsuarioReceptor': nombre_receptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'nombreUsuarioGenerador': nombre_generador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud': valor_solicitud_nombre,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
+			'idPrograma': sxp.idPrograma,
+			'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
+			'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
+			'fechaAplicadaAlPrograma': str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" else None,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	
+	db.commit()
+	return {
+		"msg": "Solicitud de cambio de fecha actualizada correctamente",
+		"idSolicitud": solicitud.id,
+		"valorSolicitud": valor_solicitud_nombre,
+		"idPrograma": programa.id,
+		"fechaInaguracionPropuesta": str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
+		"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
+		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" else None
+	}

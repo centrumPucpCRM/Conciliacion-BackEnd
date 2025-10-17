@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha
-from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno
+from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
 # Endpoint generico para crear solicitudes de alumno o programa
@@ -163,7 +163,7 @@ def editar_solicitud_generica(
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "FECHA_CAMBIADA":
-			pass
+			return aceptar_rechazar_fecha_cambiada(body, db,solicitud)
 	return
 
 @router.post("/crearLote")
