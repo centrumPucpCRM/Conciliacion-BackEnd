@@ -232,6 +232,7 @@ def crear_solicitud_fecha(body, db):
 
 	id_programa = body["idPrograma"]
 	fecha_propuesta = body.get("fechaInaguracionPropuesta")
+	comentario_frontend = body.get("comentario", "")  # Comentario opcional del frontend
 
 	# Obtener programa para idPropuesta y obtener fecha actual
 	programa = db.query(Programa).filter_by(id=id_programa).first()
@@ -247,7 +248,13 @@ def crear_solicitud_fecha(body, db):
 	# Armar comentario automático
 	usuario = db.query(Usuario).filter_by(id=id_usuario_generador).first()
 	nombre_usuario = usuario.nombre if usuario and hasattr(usuario, "nombre") else str(id_usuario_generador)
-	comentario = f"Por solicitud de {nombre_usuario} se cambia la fecha de inauguración de {fecha_actual} a {fecha_propuesta}"
+	comentario_auto = f"Por solicitud de {nombre_usuario} se cambia la fecha de inauguración de {fecha_actual} a {fecha_propuesta}"
+	
+	# Si hay comentario del frontend, agregarlo al inicio separado por \n
+	if comentario_frontend:
+		comentario = f"{comentario_frontend}\n{comentario_auto}"
+	else:
+		comentario = comentario_auto
 
 	# Obtener tipoSolicitud_id
 	tipo_solicitud_obj = db.query(TipoSolicitud).filter_by(nombre="FECHA_CAMBIADA").first()
