@@ -293,10 +293,6 @@ def crear_solicitud_fecha(body, db):
 	db.add(sxps)
 	db.commit()
 
-	# Actualizar la fechaInaguracionPropuesta del programa
-	programa.fechaInaguracionPropuesta = fecha_propuesta
-	db.commit()
-
 	# Crear log de auditoría
 	log_data = {
 		'idSolicitud': solicitud.id,
