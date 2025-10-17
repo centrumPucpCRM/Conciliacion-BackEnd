@@ -218,3 +218,97 @@ def crear_solicitud_programa(body, db):
 	db.add(log)
 	db.commit()
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
+
+def crear_solicitud_fecha(body, db):
+	"""
+	Crea una solicitud de cambio de fecha para un programa.
+	Similar a EDICION_ALUMNO pero trabaja con fechas en lugar de montos.
+	"""
+	# Validar campos obligatorios
+	required_fields = ["idPrograma", "tipo_solicitud", "fechaInaguracionPropuesta"]
+	for field in required_fields:
+		if body.get(field) is None:
+			raise HTTPException(status_code=400, detail=f"Falta campo obligatorio: {field}")
+
+	id_programa = body["idPrograma"]
+	fecha_propuesta = body.get("fechaInaguracionPropuesta")
+
+	# Obtener programa para idPropuesta y obtener fecha actual
+	programa = db.query(Programa).filter_by(id=id_programa).first()
+	if not programa:
+		raise HTTPException(status_code=400, detail="Programa no encontrado")
+	
+	id_propuesta = programa.idPropuesta
+	fecha_actual = programa.fechaDeInaguracion
+
+	id_usuario_generador = programa.idJefeProducto
+	id_usuario_receptor = "1"
+	
+	# Armar comentario automático
+	usuario = db.query(Usuario).filter_by(id=id_usuario_generador).first()
+	nombre_usuario = usuario.nombre if usuario and hasattr(usuario, "nombre") else str(id_usuario_generador)
+	comentario = f"Por solicitud de {nombre_usuario} se cambia la fecha de inauguración de {fecha_actual} a {fecha_propuesta}"
+
+	# Obtener tipoSolicitud_id
+	tipo_solicitud_obj = db.query(TipoSolicitud).filter_by(nombre="FECHA_CAMBIADA").first()
+	if not tipo_solicitud_obj:
+		raise HTTPException(status_code=400, detail="TipoSolicitud 'FECHA_CAMBIADA' no encontrado")
+	tipo_solicitud_id = tipo_solicitud_obj.id
+
+	# Obtener valorSolicitud_id para "PENDIENTE"
+	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
+	if not valor_solicitud_obj:
+		raise HTTPException(status_code=400, detail="ValorSolicitud 'PENDIENTE' no encontrado")
+	valor_solicitud_id = valor_solicitud_obj.id
+
+	# Crear la solicitud
+	solicitud = SolicitudModel(
+		idUsuarioReceptor=id_usuario_receptor,
+		idUsuarioGenerador=id_usuario_generador,
+		abierta=True,
+		tipoSolicitud_id=tipo_solicitud_id,
+		valorSolicitud_id=valor_solicitud_id,
+		idPropuesta=id_propuesta,
+		comentario=comentario,
+		creadoEn=datetime.now()
+	)
+	db.add(solicitud)
+	db.commit()
+	db.refresh(solicitud)
+
+	# Crear la relación en solicitud_x_programa con la fecha propuesta
+	sxps = SolicitudXPrograma(
+		idSolicitud=solicitud.id,
+		idPrograma=id_programa,
+		fechaInaguracionPropuesta=fecha_propuesta,
+		fechaInaguracionObjetada=None
+	)
+	db.add(sxps)
+	db.commit()
+
+	# Actualizar la fechaInaguracionPropuesta del programa
+	programa.fechaInaguracionPropuesta = fecha_propuesta
+	db.commit()
+
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idPrograma': id_programa,
+			'fechaInaguracionPropuesta': str(fecha_propuesta),
+			'fechaInaguracionObjetada': None,
+			'tipo_solicitud': "FECHA_CAMBIADA",
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	db.commit()
+	return {"msg": "Solicitud FECHA_CAMBIADA creada", "id": solicitud.id}

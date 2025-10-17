@@ -14,7 +14,7 @@ from fastapi import Body
 from sqlalchemy.orm import Session
 from typing import List
 
-from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa
+from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha
 from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
@@ -90,21 +90,18 @@ def crear_solicitud_generica(
 			return crear_solicitud_alumno(body, db)
 		elif tipo_solicitud == "ELIMINACION_BECADO":
 			oportunidad.eliminado = True
-			oportunidad.montoPropuesto = 0
 			db.commit()
 			return {"msg": "Oportunidad marcada como eliminada", "idOportunidad": id_oportunidad}
 		elif tipo_solicitud == "ELIMINACION_BECADO_REVERTIR":
 			oportunidad.eliminado = False
-			oportunidad.montoPropuesto = oportunidad.monto
 			db.commit()
 			return {"msg": "Oportunidad revertida a no eliminada", "idOportunidad": id_oportunidad}
-		
+			
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			return crear_solicitud_programa(body, db)
 		elif tipo_solicitud == "FECHA_CAMBIADA":
-			#To do: Implementar cambio de fecha en programa
-			pass
+			return crear_solicitud_fecha(body, db)
 	return
 
 @router.patch("/editar")
