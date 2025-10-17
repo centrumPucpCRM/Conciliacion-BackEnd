@@ -178,6 +178,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
+    programas_fecha_editada = set()  # Programas con solicitud FECHA_CAMBIADA
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
         # No considerar solicitudes ACEPTADAS
         if s.get("valorSolicitud") == "ACEPTADO":
@@ -192,6 +193,9 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
+            # Si es solicitud de tipo FECHA_CAMBIADA, agregarlo al set
+            if s.get("tipoSolicitud") == "FECHA_CAMBIADA":
+                programas_fecha_editada.add(programa["idPrograma"])
     for p in programas_filtrados:
         # Excluir programas con noAperturar = True
         if p.noAperturar:
@@ -228,7 +232,8 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "atipico": bool(atipico),
             "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
             "noAperturar": bool(p.noAperturar),
-            "comentario": p.comentario
+            "comentario": p.comentario,
+            "fechaEditada": bool(p.id in programas_fecha_editada)
 
         })
         total_meta += p.metaDeVenta or 0
@@ -260,6 +265,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     # Obtener ids de alumnos y programas involucrados en solicitudes ACEPTADAS
     alumnos_solicitudes = set()
     programas_solicitudes = set()
+    programas_fecha_editada = set()  # Programas con solicitud FECHA_CAMBIADA
     for s in solicitudes.get("solicitudesPropuestaOportunidad", []):
         # No considerar solicitudes ACEPTADAS
         if s.get("valorSolicitud") == "ACEPTADO":
@@ -274,6 +280,9 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
         programa = s.get("programa")
         if programa and programa.get("idPrograma"):
             programas_solicitudes.add(programa["idPrograma"])
+            # Si es solicitud de tipo FECHA_CAMBIADA, agregarlo al set
+            if s.get("tipoSolicitud") == "FECHA_CAMBIADA":
+                programas_fecha_editada.add(programa["idPrograma"])
 
     for offset in [2, 3, 4]:
         mes = mes_conciliacion.month - offset
@@ -325,7 +334,8 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "oportunidad_total_count": count_opty,
                 "atipico": atipico,
                 "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
-                "comentario": p.comentario
+                "comentario": p.comentario,
+                "fechaEditada": bool(p.id in programas_fecha_editada)
             })
             total_meta += p.metaDeVenta or 0
             total_monto += monto_opty
