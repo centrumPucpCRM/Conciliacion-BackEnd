@@ -58,7 +58,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
     if id_usuario == 2: 
         id_usuario = 1
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
-    tipo_programa = "EXCLUSION_PROGRAMA"
+    tipo_programa = {"EXCLUSION_PROGRAMA","FECHA_CAMBIADA"}
     solicitudes = db.query(SolicitudModel).filter(
         ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
         SolicitudModel.idPropuesta == id_propuesta
@@ -131,7 +131,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         tipo = solicitud_dict["tipoSolicitud"]
         if tipo in tipos_oportunidad:
             solicitudesPropuestaOportunidad.append(solicitud_dict)
-        elif tipo == tipo_programa:
+        elif tipo in tipo_programa:
             solicitudesPropuestaPrograma.append(solicitud_dict)
         else:
             solicitudesGenerales.append(solicitud_dict)
