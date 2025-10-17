@@ -146,9 +146,9 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)
-    if not propuesta or not propuesta.fechaPropuesta:
+    if not propuesta or not propuesta.fechaInaguracionPropuesta:
         return {"items": [], "totalizadores": {}}
-    mes_conciliacion = propuesta.fechaPropuesta
+    mes_conciliacion = propuesta.fechaInaguracionPropuesta
     if mes_conciliacion.month == 1:
         mes_anterior = 12
         anio_anterior = mes_conciliacion.year - 1
@@ -165,7 +165,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             Programa.idJefeProducto == id_usuario,
             Programa.idPropuesta == id_propuesta
         ).all()
-    programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes_anterior and p.fechaDeInaguracion.year == anio_anterior]
+    programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
     oportunidades_por_programa = {}
@@ -214,7 +214,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         items.append({
             "id": p.id,
             "nombre": p.nombre,
-            "fechaDeInaguracion": p.fechaDeInaguracion,
+            "fechaDeInaguracion": p.fechaInaguracionPropuesta,
             "codigo": p.codigo,
             "moneda": p.moneda,
             "precioDeLista": p.precioDeLista,
@@ -243,9 +243,9 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     return {"items": items, "totalizadores": totalizadores}
 def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
     propuesta = db.query(Propuesta).get(id_propuesta)
-    if not propuesta or not propuesta.fechaPropuesta:
+    if not propuesta or not propuesta.fechaInaguracionPropuesta:
         return {"items": [], "totalizadores": {}}
-    mes_conciliacion = propuesta.fechaPropuesta
+    mes_conciliacion = propuesta.fechaInaguracionPropuesta
     items = []
     total_meta = 0
     total_monto = 0
@@ -290,7 +290,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 Programa.idJefeProducto == id_usuario,
                 Programa.idPropuesta == id_propuesta
             ).all()
-        programas_filtrados = [p for p in programas if p.fechaDeInaguracion.month == mes and p.fechaDeInaguracion.year == anio]
+        programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes and p.fechaInaguracionPropuesta.year == anio]
         for p in programas_filtrados:
             # Excluir programas con noAperturar = True
             if p.noAperturar:
@@ -311,7 +311,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
             items.append({
                 "id": p.id,
                 "nombre": p.nombre,
-                "fechaDeInaguracion": p.fechaDeInaguracion,
+                "fechaDeInaguracion": p.fechaInaguracionPropuesta,
                 "codigo": p.codigo,
                 "moneda": p.moneda,
                 "precioDeLista": p.precioDeLista,
