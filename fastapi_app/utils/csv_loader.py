@@ -40,58 +40,125 @@ def cargar_carteras(db, df):
             db.flush()
     return carteras_dict
 
-def cargar_usuarios(db, df, carteras_dict):
-    usuarios_dict = {}
+def cargar_jps(db, df, carteras_dict, usuarios_dict):
+    """
+    Carga Jefes de Producto desde el CSV.
+    Crea usuarios con rol 'Comercial - Jefe de producto' y les asigna carteras.
+    """
     usuario_carteras_map = {}
-
-    # Construir mapa usuario -> set(carteras) tal cual viene en el CSV
+    
+    # Construir mapa usuario JP -> set(carteras)
     for _, row in df.iterrows():
         u = row.get('usuario.nombre')
         c = row.get('cartera.nombre')
         if pd.notna(u) and pd.notna(c):
             usuario_carteras_map.setdefault(str(u), set()).add(str(c))
-
+    
     if not usuario_carteras_map:
-        return {}
-
-    # Rol opcional
-    rol = db.query(Rol).filter(Rol.nombre == "Comercial - Jefe de producto").first()
-
+        return
+    
+    # Obtener rol JP
+    rol_jp = db.query(Rol).filter(Rol.nombre == "Comercial - Jefe de producto").first()
+    
     # Traer existentes exactamente por nombre
-    nombres = list(usuario_carteras_map.keys())
-    existentes = db.query(Usuario).filter(Usuario.nombre.in_(nombres)).all()
-    existentes_dict = {str(u.nombre): u for u in existentes}
-
+    nombres_jp = list(usuario_carteras_map.keys())
+    existentes_jp = db.query(Usuario).filter(Usuario.nombre.in_(nombres_jp)).all()
+    existentes_jp_dict = {str(u.nombre): u for u in existentes_jp}
+    
     # Crear faltantes y/o usar existentes
-    nuevos = []
-    for un in nombres:
-        u = existentes_dict.get(un)
+    for un in nombres_jp:
+        u = existentes_jp_dict.get(un)
         if not u:
             u = Usuario(
                 nombre=un,
-                clave= str(un).replace(' ', '.'),
+                clave=str(un).replace(' ', '.'),
                 correo=f"{str(un).replace(' ', '.')}@ejemplo.com",
                 activo=True
             )
             db.add(u)
-            nuevos.append(u)
-        if rol and rol not in u.roles:
-            u.roles.append(rol)
+        if rol_jp and rol_jp not in u.roles:
+            u.roles.append(rol_jp)
         usuarios_dict[un] = u
-
+    
     # Asegurar IDs antes de relaciones
     db.flush()
-
+    
     # Asignar carteras evitando duplicados
     for un, carteras in usuario_carteras_map.items():
         usuario = usuarios_dict[un]
         actuales = {c.nombre for c in usuario.carteras}
         for cn in carteras:
-            cartera = carteras_dict.get(cn)  # búsqueda exacta
+            cartera = carteras_dict.get(cn)
             if cartera and cartera.nombre not in actuales:
                 usuario.carteras.append(cartera)
                 actuales.add(cartera.nombre)
 
+def cargar_subdirectores(db, df, carteras_dict, usuarios_dict):
+    """
+    Carga Subdirectores desde el CSV.
+    Crea usuarios con rol 'Comercial - Subdirector' y les asigna carteras.
+    """
+    subdirector_carteras_map = {}
+    
+    # Construir mapa subdirector -> set(carteras)
+    for _, row in df.iterrows():
+        s = row.get('usuario.nombreSubdirector')
+        c = row.get('cartera.nombre')
+        if pd.notna(s) and pd.notna(c):
+            subdirector_carteras_map.setdefault(str(s), set()).add(str(c))
+    
+    if not subdirector_carteras_map:
+        return
+    
+    # Obtener rol Subdirector
+    rol_subdirector = db.query(Rol).filter(Rol.nombre == "Comercial - Subdirector").first()
+    
+    # Traer existentes exactamente por nombre
+    nombres_subdirectores = list(subdirector_carteras_map.keys())
+    existentes_subdirectores = db.query(Usuario).filter(Usuario.nombre.in_(nombres_subdirectores)).all()
+    existentes_subdirectores_dict = {str(u.nombre): u for u in existentes_subdirectores}
+    
+    # Crear faltantes y/o usar existentes
+    for sn in nombres_subdirectores:
+        u = existentes_subdirectores_dict.get(sn)
+        if not u:
+            u = Usuario(
+                nombre=sn,
+                clave=str(sn).replace(' ', '.'),
+                correo=f"{str(sn).replace(' ', '.')}@ejemplo.com",
+                activo=True
+            )
+            db.add(u)
+        if rol_subdirector and rol_subdirector not in u.roles:
+            u.roles.append(rol_subdirector)
+        usuarios_dict[sn] = u
+    
+    # Asegurar IDs antes de relaciones
+    db.flush()
+    
+    # Asignar carteras evitando duplicados
+    for sn, carteras in subdirector_carteras_map.items():
+        subdirector = usuarios_dict[sn]
+        actuales = {c.nombre for c in subdirector.carteras}
+        for cn in carteras:
+            cartera = carteras_dict.get(cn)
+            if cartera and cartera.nombre not in actuales:
+                subdirector.carteras.append(cartera)
+                actuales.add(cartera.nombre)
+
+def cargar_usuarios(db, df, carteras_dict):
+    """
+    Carga todos los usuarios (JPs y Subdirectores) desde el CSV.
+    Orquesta la carga de ambos tipos de usuarios.
+    """
+    usuarios_dict = {}
+    
+    # Cargar Jefes de Producto
+    cargar_jps(db, df, carteras_dict, usuarios_dict)
+    
+    # Cargar Subdirectores
+    cargar_subdirectores(db, df, carteras_dict, usuarios_dict)
+    
     return usuarios_dict
 
 
@@ -142,6 +209,24 @@ def cargar_propuesta(db, data):
 
 
 def cargar_programas(db, df, propuesta_unica, usuarios_dict):
+    def sanitize_value(val):
+        """Convierte NaN, None, y strings vacíos a None, y tipos NumPy a Python nativos"""
+        if val is None:
+            return None
+        if isinstance(val, float):
+            if math.isnan(val):
+                return None
+            return val
+        if isinstance(val, str):
+            stripped = val.strip()
+            if stripped == '' or stripped.lower() in {'nan', 'none'}:
+                return None
+            return stripped
+        # Convertir tipos NumPy a Python nativos
+        if hasattr(val, 'item'):  # numpy types have .item() method
+            return val.item()
+        return val
+    
     programas_dict = {}
     fecha_propuesta = propuesta_unica.creadoEn.date() if hasattr(propuesta_unica.creadoEn, 'date') else propuesta_unica.creadoEn
     tipos_cambio = db.query(TipoCambio).filter(TipoCambio.fecha_tipo_cambio == fecha_propuesta).all()
@@ -152,29 +237,61 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
     programas_bulk = []
     for programa_codigo, group in grouped:
         row = group.iloc[0]
-        programa_nombre = str(row.get('programa.nombre', f"Programa {programa_codigo}")).strip()
-        moneda = str(row.get('programa.moneda', 'PEN')).strip()
-        subdireccion = str(row.get('programa.subdireccion', '')) if row.get('programa.subdireccion', None) is not None else None
-        usuario_nombre = str(row.get('usuario.nombre', '')).strip()
-
-        mes = pd.to_datetime(row.get('programa.fecha_de_inauguracion')).strftime('%m')
+        
+        # Sanitizar todos los valores antes de usarlos
+        programa_nombre = sanitize_value(row.get('programa.nombre', f"Programa {programa_codigo}"))
+        if programa_nombre is None:
+            programa_nombre = f"Programa {programa_codigo}"
+        
+        moneda = sanitize_value(row.get('programa.moneda', 'PEN'))
+        if moneda is None:
+            moneda = 'PEN'
+        
+        subdireccion = sanitize_value(row.get('programa.subdireccion'))
+        usuario_nombre = sanitize_value(row.get('usuario.nombre', ''))
+        usuario_nombreSubdirector = sanitize_value(row.get('usuario.nombreSubdirector', ''))
+        
+        fecha_inauguracion = sanitize_value(row.get('programa.fecha_de_inauguracion'))
+        
+        # Calcular mes de forma segura
+        if fecha_inauguracion and pd.notna(fecha_inauguracion):
+            try:
+                mes = pd.to_datetime(fecha_inauguracion).strftime('%m')
+            except:
+                mes = None
+        else:
+            mes = None
+        
+        precio_lista = sanitize_value(row.get('programa.precio_lista', 0))
+        meta_venta = sanitize_value(row.get('programa.meta_venta', 0))
+        punto_minimo = sanitize_value(row.get('programa.punto_minimo_apertura', 0))
+        meta_alumnos = sanitize_value(row.get('programa.meta_alumnos', 0))
+        cartera_nombre = sanitize_value(row.get('cartera.nombre'))
+        
+        # Convertir a tipos correctos después de sanitizar
+        precio_lista = float(precio_lista) if precio_lista is not None else 0.0
+        meta_venta = float(meta_venta) if meta_venta is not None else 0.0
+        punto_minimo = int(punto_minimo) if punto_minimo is not None else 0
+        meta_alumnos = int(meta_alumnos) if meta_alumnos is not None else 0
+        
         programa = Programa(
             codigo=programa_codigo,
             nombre=programa_nombre,
-            fechaDeInaguracion=row.get('programa.fecha_de_inauguracion'),
+            fechaDeInaguracion=fecha_inauguracion,
             moneda=moneda,
-            precioDeLista=float(row.get('programa.precio_lista', 0)),
-            metaDeVenta=float(row.get('programa.meta_venta', 0)),
-            puntoMinimoApertura=int(row.get('programa.punto_minimo_apertura', 0)),
+            precioDeLista=precio_lista,
+            metaDeVenta=meta_venta,
+            puntoMinimoApertura=punto_minimo,
             subdireccion=subdireccion,
             idPropuesta=propuesta_unica.id,
-            idJefeProducto=usuarios_dict.get(usuario_nombre).id if usuario_nombre in usuarios_dict else None,
-            fechaInaguracionPropuesta=row.get('programa.fecha_de_inauguracion'),
-            idTipoCambio=tipos_cambio_dict.get(moneda).id,
-            cartera=row.get('cartera.nombre'),
+            idJefeProducto=usuarios_dict.get(usuario_nombre).id if usuario_nombre and usuario_nombre in usuarios_dict else None,
+            idSubdirector=usuarios_dict.get(usuario_nombreSubdirector).id if usuario_nombreSubdirector and usuario_nombreSubdirector in usuarios_dict else None,
+            fechaInaguracionPropuesta=fecha_inauguracion,
+            idTipoCambio=tipos_cambio_dict.get(moneda).id if moneda in tipos_cambio_dict else None,
+            cartera=cartera_nombre,
             mes=mes,
             mesPropuesto=mes,
-            metaDeAlumnos=row.get('programa.meta_alumnos', 0)
+            metaDeAlumnos=meta_alumnos
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
@@ -215,6 +332,18 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
         if str(val).lower() == 'nan' or val is None:
             return False
         return bool(val)
+    
+    # Helper para sanitizar moneda específicamente
+    def sanitize_moneda(val):
+        """Sanitiza moneda, devuelve 'PEN' por defecto si es None o inválido"""
+        if val is None:
+            return 'PEN'
+        if isinstance(val, float) and math.isnan(val):
+            return 'PEN'
+        sval = str(val).strip()
+        if sval.lower() in {'nan', 'none', ''}:
+            return 'PEN'
+        return sval
 
     # Calcular si es atípico fila por fila (simple, no vectorizado)
     atipicos = []
@@ -243,9 +372,13 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 correo = sanitize_str(row.get('oportunidad.correo', ''))
                 telefono = sanitize_str(row.get('oportunidad.telefono', ''))
                 etapaDeVentas = sanitize_str(row.get('oportunidad.etapa_venta', 'NUEVA'))
-                moneda = sanitize_str(row.get('oportunidad.moneda', 'PEN'))
+                moneda = sanitize_moneda(row.get('oportunidad.moneda'))  # ✅ Usa sanitize_moneda
                 programa_codigo = sanitize_str(row.get('programa.codigo', ''))
-                id_tipo_cambio = tipos_cambio_dict.get(moneda).id  
+                
+                # Obtener id_tipo_cambio de forma segura
+                tipo_cambio_obj = tipos_cambio_dict.get(moneda)
+                id_tipo_cambio = tipo_cambio_obj.id if tipo_cambio_obj else None
+                
                 descuento = sanitize_float(row.get('oportunidad.descuento', 0))
                 monto = sanitize_float(row.get('oportunidad.monto', 0))
                 becado = sanitize_bool(row.get('oportunidad.becado', False))
@@ -311,29 +444,34 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     from fastapi_app.models.log import Log
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
-    subdirector_jefe_nombres = ["Jefe grado", "Jefe ee", "Jefe CentrumX"]
-    usuarios = db.query(Usuario).all()
-    usuarios_por_nombre = {u.nombre.strip().lower(): u for u in usuarios}
+    
+    # Obtener dinámicamente todos los usuarios con rol "Comercial - Subdirector"
+    rol_subdirector = db.query(Rol).filter(Rol.nombre == "Comercial - Subdirector").first()
+    if not rol_subdirector:
+        print(f"[WARNING] Rol 'Comercial - Subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
+        return
+    
+    subdirectores = db.query(Usuario).join(Usuario.roles).filter(Rol.id == rol_subdirector.id).all()
+    
+    if not subdirectores:
+        print(f"[WARNING] No se encontraron usuarios con rol 'Comercial - Subdirector'. Saltando creación de solicitudes.")
+        return
+    
     solicitudes_bulk = []
     logs_bulk = []
-    receptor_usuario = usuarios_por_nombre.get('daf.subdirector')
+    
+    # Obtener el receptor (DAF Subdirector)
+    receptor_usuario = db.query(Usuario).filter(Usuario.nombre == 'daf.subdirector').first()
     
     # Validar que el receptor existe
     if not receptor_usuario:
         print(f"[WARNING] Usuario 'daf.subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
         return
     
-    for jefe_nombre in subdirector_jefe_nombres:
-        generador_usuario = usuarios_por_nombre.get(jefe_nombre.strip().lower())
-        
-        # Validar que el generador existe
-        if not generador_usuario:
-            print(f"[WARNING] Usuario '{jefe_nombre}' no encontrado. Saltando solicitud.")
-            continue
-            
-        comentario = f"Solicitud de {generador_usuario.nombre} para revision"
+    for subdirector in subdirectores:
+        comentario = f"Solicitud de {subdirector.nombre} para revision"
         nueva_solicitud = Solicitud(
-            idUsuarioGenerador=generador_usuario.id,
+            idUsuarioGenerador=subdirector.id,
             idUsuarioReceptor=receptor_usuario.id,
             tipoSolicitud_id=tipo_aprobacion.id,
             valorSolicitud_id=valor_pendiente.id,
@@ -368,48 +506,58 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
         db.flush()
 
 
-def crear_solicitudes_Jp(db, df, propuesta_unica):
+def crear_solicitudes_Jp(db, propuesta_unica):
     from fastapi_app.models.log import Log
-    subdireccion_jefe_map = {
-        "Grado": "Jefe grado",
-        "Educacion Ejecutiva": "Jefe ee",
-        "CentrumX": "Jefe CentrumX"
-    }
-    usuarios = db.query(Usuario).all()
-    usuarios_por_nombre = {u.nombre.strip().lower(): u for u in usuarios}
+    
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
-    agrupadores = ['usuario.nombre', 'programa.subdireccion']
-    df_grouped = df.dropna(subset=agrupadores)
-    combinaciones = df_grouped.groupby(agrupadores).size().reset_index().drop(columns=0)
+    
+    # Obtener todos los programas de esta propuesta con JP y Subdirector asignados
+    programas = db.query(Programa).filter(
+        Programa.idPropuesta == propuesta_unica.id,
+        Programa.idJefeProducto.isnot(None),
+        Programa.idSubdirector.isnot(None)
+    ).all()
+    
+    if not programas:
+        print(f"[WARNING] No se encontraron programas con JP y Subdirector asignados. Saltando creación de solicitudes JP.")
+        return
+    
+    # Crear conjunto de combinaciones únicas (idJefeProducto, idSubdirector)
+    combinaciones_unicas = set()
+    for programa in programas:
+        combinaciones_unicas.add((programa.idJefeProducto, programa.idSubdirector))
+    
+    if not combinaciones_unicas:
+        print(f"[WARNING] No se encontraron combinaciones JP-Subdirector. Saltando creación de solicitudes JP.")
+        return
+    
+    # Obtener todos los usuarios necesarios de una vez
+    usuarios_ids = set()
+    for jp_id, sub_id in combinaciones_unicas:
+        usuarios_ids.add(jp_id)
+        usuarios_ids.add(sub_id)
+    
+    usuarios = db.query(Usuario).filter(Usuario.id.in_(usuarios_ids)).all()
+    usuarios_dict = {u.id: u for u in usuarios}
+    
     solicitudes_bulk = []
     logs_bulk = []
-    for _, row in combinaciones.iterrows():
-        usuario_nombre = str(row.get('usuario.nombre', '')).strip().lower()
-        subdireccion = str(row.get('programa.subdireccion', '')).strip()
-        usuario = usuarios_por_nombre.get(usuario_nombre)
-        jefe_nombre = subdireccion_jefe_map.get(subdireccion)
+    
+    # Crear UNA solicitud por cada combinación única JP → Subdirector
+    for jp_id, subdirector_id in combinaciones_unicas:
+        jp_usuario = usuarios_dict.get(jp_id)
+        subdirector_usuario = usuarios_dict.get(subdirector_id)
         
-        # Validar que el usuario existe
-        if not usuario:
-            print(f"[WARNING] Usuario '{usuario_nombre}' no encontrado. Saltando solicitud.")
+        if not jp_usuario or not subdirector_usuario:
+            print(f"[WARNING] Usuario no encontrado (JP: {jp_id}, Subdirector: {subdirector_id}). Saltando solicitud.")
             continue
         
-        # Validar que el jefe existe
-        if not jefe_nombre:
-            print(f"[WARNING] No hay jefe asignado para subdirección '{subdireccion}'. Saltando solicitud.")
-            continue
-            
-        jefe_usuario = usuarios_por_nombre.get(jefe_nombre.strip().lower())
+        comentario = f"Solicitud de {jp_usuario.nombre} para revisión de {subdirector_usuario.nombre}"
         
-        if not jefe_usuario:
-            print(f"[WARNING] Jefe '{jefe_nombre}' no encontrado. Saltando solicitud.")
-            continue
-        
-        comentario = f"Solicitud de {usuario.nombre}  para la subdirección '{subdireccion}'."
         nueva_solicitud = Solicitud(
-            idUsuarioGenerador=usuario.id,
-            idUsuarioReceptor=jefe_usuario.id,
+            idUsuarioGenerador=jp_usuario.id,
+            idUsuarioReceptor=subdirector_usuario.id,
             tipoSolicitud_id=tipo_aprobacion.id,
             valorSolicitud_id=valor_pendiente.id,
             idPropuesta=propuesta_unica.id,
@@ -453,14 +601,33 @@ def cargar_datos_base(db, data):
     db.commit()
     propuesta_unica = cargar_propuesta(db, data)
     return df, usuarios_dict, propuesta_unica
-# Helper function for CSV loading
+
+import pandas as pd
 def cargar_csv(data):
     fecha = data.get("fechaDatos")
     hora = data.get("horaDatos")
-    csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "+" + hora + ".csv"
-    df = pd.read_csv(csv_url, decimal=',')
-    if df is None or df.empty:
-        raise HTTPException(status_code=400, detail="El archivo CSV no contiene registros para procesar")
+    csv_url = "https://centrum-conciliacion-service.s3.us-east-1.amazonaws.com/CONCILIACION_" + fecha + "+" + hora + ".xlsx"
+    DATE_COLS = [
+        'programa.fecha_de_inicio',
+        'programa.fecha_de_inauguracion',
+        'programa.fecha_ultima_postulante',
+        'oportunidad.fecha_matricula',
+    ]
+    df = pd.read_excel(
+        csv_url,
+        sheet_name="Conciliacion",
+        parse_dates=DATE_COLS,
+        engine="openpyxl",
+        keep_default_na=True,
+        na_filter=True,
+    )
+
+    for c in DATE_COLS:
+        if c in df.columns:
+            # strftime -> 'YYYY-MM-DD'; NaT permanece como NaT y luego lo pasamos a None
+            s = df[c].dt.strftime('%Y-%m-%d')
+            df[c] = s.where(df[c].notna(), None)
+
     df = df.copy()
     df.columns = df.columns.str.strip()
     return df
@@ -528,9 +695,9 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
         timings['generar_solicitudes_aprobacion'] = time.time() - start
         print(f"Tiempo generar_solicitudes_aprobacion: {timings['generar_solicitudes_aprobacion']:.4f} segundos")
 
-        # 6. Crear solicitudes de aprobación por cartera y subdirección
+        # 6. Crear solicitudes de aprobación JP
         start = time.time()
-        crear_solicitudes_Jp(db, df, propuesta_unica)
+        crear_solicitudes_Jp(db, propuesta_unica)
         timings['crear_solicitudes_Jp'] = time.time() - start
         print(f"Tiempo crear_solicitudes_Jp: {timings['crear_solicitudes_Jp']:.4f} segundos")
 

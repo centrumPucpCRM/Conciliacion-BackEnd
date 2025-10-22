@@ -162,28 +162,7 @@ def crear_usuarios_predeterminados():
             "correo": "admin@pucp.edu.pe",
             "rol_nombre": "Administrador",
             "clave": "admin"
-        },
-        {
-            "nombre": "Jefe grado",
-            "documentoIdentidad": None,
-            "correo": "jefe.grado@pucp.edu.pe",
-            "rol_nombre": "Comercial - Subdirector",
-            "clave": "jefe.grado"
-        },
-        {
-            "nombre": "Jefe ee",
-            "documentoIdentidad": None,
-            "correo": "jefe.ee@pucp.edu.pe",
-            "rol_nombre": "Comercial - Subdirector",
-            "clave": "jefe.ee"
-        },
-        {
-            "nombre": "Jefe CentrumX",
-            "documentoIdentidad": None,
-            "correo": "jefe.centrumx@pucp.edu.pe",
-            "rol_nombre": "Comercial - Subdirector",
-            "clave": "jefe.centrumx"
-        },
+        }
     ]
 
     db: Session = SessionLocal()
