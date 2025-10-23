@@ -59,13 +59,19 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
     if id_usuario == 2: 
         id_usuario = 1
     
+    # Obtener el usuario y su rol
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    rol_usuario = None
+    if usuario and usuario.roles:
+        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+    
     # Obtener dinámicamente los IDs de usuarios con roles "DAF - Subdirector" y "Comercial - Subdirector"
     ids_subdirectores = set()
     subdirectores = db.query(Usuario).join(Usuario.roles).filter(
         Rol.nombre.in_(["DAF - Subdirector", "Comercial - Subdirector"])
     ).all()
     ids_subdirectores = {u.id for u in subdirectores}
-    print(ids_subdirectores)
+    
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
     tipo_programa = {"EXCLUSION_PROGRAMA","FECHA_CAMBIADA"}
     solicitudes = db.query(SolicitudModel).filter(
@@ -145,11 +151,30 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         else:
             solicitudesGenerales.append(solicitud_dict)
     
-    # Usar el set dinámico de IDs de subdirectores (más los IDs fijos históricos 2, 4, 5, 6)
+    # Usar el set dinámico de IDs de subdirectores
     ids_que_solo_ven_generales = ids_subdirectores
     
     if id_usuario in ids_que_solo_ven_generales:
-        return {"solicitudesGenerales": solicitudesGenerales}
+        # Filtrar solicitudes generales según el rol
+        solicitudesGeneralesFiltradas = []
+        
+        if rol_usuario == "DAF - Subdirector":
+            # Solo mostrar APROBACION_COMERCIAL
+            solicitudesGeneralesFiltradas = [
+                s for s in solicitudesGenerales 
+                if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
+            ]
+        elif rol_usuario == "Comercial - Subdirector":
+            # Solo mostrar APROBACION_JP
+            solicitudesGeneralesFiltradas = [
+                s for s in solicitudesGenerales 
+                if s.get("tipoSolicitud") == "APROBACION_JP"
+            ]
+        else:
+            # Otros subdirectores ven todas las generales
+            solicitudesGeneralesFiltradas = solicitudesGenerales
+        
+        return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
     else:
         return {
             "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
