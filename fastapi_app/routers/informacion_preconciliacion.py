@@ -14,6 +14,7 @@ from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
 from fastapi_app.schemas.solicitud import Solicitud, SolicitudOportunidad, SolicitudPrograma
 from fastapi_app.models.usuario import Usuario
 from fastapi_app.models.cartera import Cartera
+from fastapi_app.models.rol_permiso import Rol
 
 # def obtener_carteras_usuario(id_usuario: int, db: Session):
 #     usuario = db.query(Usuario).get(id_usuario)
@@ -57,6 +58,14 @@ def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Se
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     if id_usuario == 2: 
         id_usuario = 1
+    
+    # Obtener dinámicamente los IDs de usuarios con roles "DAF - Subdirector" y "Comercial - Subdirector"
+    ids_subdirectores = set()
+    subdirectores = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Subdirector", "Comercial - Subdirector"])
+    ).all()
+    ids_subdirectores = {u.id for u in subdirectores}
+    print(ids_subdirectores)
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
     tipo_programa = {"EXCLUSION_PROGRAMA","FECHA_CAMBIADA"}
     solicitudes = db.query(SolicitudModel).filter(
@@ -135,7 +144,11 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             solicitudesPropuestaPrograma.append(solicitud_dict)
         else:
             solicitudesGenerales.append(solicitud_dict)
-    if id_usuario in [2, 4, 5, 6]:
+    
+    # Usar el set dinámico de IDs de subdirectores (más los IDs fijos históricos 2, 4, 5, 6)
+    ids_que_solo_ven_generales = ids_subdirectores
+    
+    if id_usuario in ids_que_solo_ven_generales:
         return {"solicitudesGenerales": solicitudesGenerales}
     else:
         return {
@@ -155,7 +168,13 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     else:
         mes_anterior = mes_conciliacion.month - 1
         anio_anterior = mes_conciliacion.year
-    ids_no_filtrar = {1,2,3,4,5,6}
+    
+    # Obtener dinámicamente IDs de DAF y Subdirectores
+    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
+    ).all()
+    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    
     if id_usuario in ids_no_filtrar:
         programas = db.query(Programa).filter(
             Programa.idPropuesta == id_propuesta
@@ -255,7 +274,13 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     total_meta = 0
     total_monto = 0
     total_oportunidades = 0
-    ids_no_filtrar = {1,2,3,4,5,6}
+    
+    # Obtener dinámicamente IDs de DAF y Subdirectores
+    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
+    ).all()
+    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
     oportunidades_por_programa = {}
