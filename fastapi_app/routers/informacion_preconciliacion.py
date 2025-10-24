@@ -195,7 +195,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         
         return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
     
-    # Caso por defecto: devolver oportunidad/programa
+    # Caso por defecto: devolver oportunidad/programa 
     return {
         "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
         "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
