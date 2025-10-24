@@ -171,7 +171,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
                 if s.get("tipoSolicitud") == "APROBACION_JP"
             ]
         else:
-            # Otros subdirectores ven todas las generales
+            # Otros subdirectores ven todas las generales 
             solicitudesGeneralesFiltradas = solicitudesGenerales
         
         return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
