@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 
 from fastapi_app.database import get_db
-from fastapi_app.models.solicitud import Solicitud as SolicitudModel
+from fastapi_app.models.solicitud import Solicitud as SolicitudModel, ValorSolicitud
 from fastapi_app.models.oportunidad import Oportunidad
 
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
@@ -245,13 +245,18 @@ def abrir_solicitudes_aprobacion_jp(
 	
 	# Buscar todas las solicitudes APROBACION_JP del usuario para la propuesta
 	solicitudes = db.query(SolicitudModel).filter(
-		((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+		(SolicitudModel.idUsuarioGenerador == id_usuario),
 		SolicitudModel.idPropuesta == id_propuesta
 	).all()
 	
 	solicitudes_actualizadas = []
 	for solicitud in solicitudes:
 		if solicitud.tipoSolicitud and solicitud.tipoSolicitud.nombre == "APROBACION_JP":
+			# Si el generador y receptor son el mismo, aprobar automáticamente
+			if solicitud.idUsuarioGenerador == solicitud.idUsuarioReceptor:
+				valor_aceptado = db.query(ValorSolicitud).filter_by(nombre="ACEPTADO").first()
+				if valor_aceptado:
+					solicitud.valorSolicitud_id = valor_aceptado.id
 			solicitud.abierta = False
 			solicitudes_actualizadas.append(solicitud.id)
 	
