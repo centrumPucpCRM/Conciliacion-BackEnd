@@ -59,11 +59,14 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
     if id_usuario == 2: 
         id_usuario = 1
     
-    # Obtener el usuario y su rol
+    # Obtener el usuario y TODOS sus roles
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
-    rol_usuario = None
+    roles_usuario = set()
     if usuario and usuario.roles:
-        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+        roles_usuario = {rol.nombre for rol in usuario.roles}
+    
+    # Verificar si tiene rol de Jefe de Producto
+    es_jefe_producto = "Comercial - Jefe de producto" in roles_usuario
     
     # Obtener dinámicamente los IDs de usuarios con roles "DAF - Subdirector" y "Comercial - Subdirector"
     ids_subdirectores = set()
@@ -151,35 +154,52 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         else:
             solicitudesGenerales.append(solicitud_dict)
     
-    # Usar el set dinámico de IDs de subdirectores
-    ids_que_solo_ven_generales = ids_subdirectores
+    # Si el usuario tiene rol de Jefe de Producto, siempre devuelve solicitudes de oportunidad/programa
+    if es_jefe_producto:
+        # Si además tiene rol de Comercial - Subdirector, agregar APROBACION_JP filtradas
+        if "Comercial - Subdirector" in roles_usuario:
+            solicitudesGeneralesFiltradas = [
+                s for s in solicitudesGenerales 
+                if s.get("tipoSolicitud") == "APROBACION_JP"
+            ]
+            return {
+                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
+                "solicitudesGenerales": solicitudesGeneralesFiltradas
+            }
+        else:
+            return {
+                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
+            }
     
-    if id_usuario in ids_que_solo_ven_generales:
-        # Filtrar solicitudes generales según el rol
+    # Si NO es JP pero es subdirector, filtrar solicitudes generales según el rol
+    if id_usuario in ids_subdirectores:
         solicitudesGeneralesFiltradas = []
         
-        if rol_usuario == "DAF - Subdirector":
+        if "DAF - Subdirector" in roles_usuario:
             # Solo mostrar APROBACION_COMERCIAL
             solicitudesGeneralesFiltradas = [
                 s for s in solicitudesGenerales 
                 if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
             ]
-        elif rol_usuario == "Comercial - Subdirector":
+        elif "Comercial - Subdirector" in roles_usuario:
             # Solo mostrar APROBACION_JP
             solicitudesGeneralesFiltradas = [
                 s for s in solicitudesGenerales 
                 if s.get("tipoSolicitud") == "APROBACION_JP"
             ]
         else:
-            # Otros subdirectores ven todas las generales 
+            # Otros subdirectores ven todas las generales
             solicitudesGeneralesFiltradas = solicitudesGenerales
         
         return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
-    else:
-        return {
-            "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-            "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-        }
+    
+    # Caso por defecto: devolver oportunidad/programa
+    return {
+        "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+        "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
+    }
 
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
