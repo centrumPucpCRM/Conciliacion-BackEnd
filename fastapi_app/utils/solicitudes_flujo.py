@@ -18,18 +18,40 @@ def aceptar_rechazar_solicitud_subdirectores(body, db, solicitud):
 	if valor_solicitud_nombre == "RECHAZADO":
 		# Si es rechazado, cambiar abierta a True para que vuelva a aparecer
 		solicitud.abierta = True
-		comentario = body.get("comentario", "")
-		if comentario:
-			solicitud.comentario = comentario
+		nuevo_comentario = body.get("comentario", "")
+		if nuevo_comentario:
+			# Si hay un comentario existente
+			if solicitud.comentario:
+				# Si tiene salto de línea, reemplazar lo anterior al salto de línea
+				if "\n" in solicitud.comentario:
+					parte_despues_salto = solicitud.comentario.split("\n", 1)[1]
+					solicitud.comentario = f"{nuevo_comentario}\n{parte_despues_salto}"
+				else:
+					# Si no tiene salto de línea, concatenar con salto de línea
+					solicitud.comentario = f"{nuevo_comentario}\n{solicitud.comentario}"
+			else:
+				# Si no hay comentario previo, solo poner el nuevo
+				solicitud.comentario = nuevo_comentario
 	elif valor_solicitud_nombre == "ACEPTADO":
 		# Si es aceptado, cambiar el estado a ACEPTADO
 		valor_aceptado = db.query(ValorSolicitud).filter_by(nombre="ACEPTADO").first()
 		if not valor_aceptado:
 			raise HTTPException(status_code=400, detail="ValorSolicitud 'ACEPTADO' no encontrado")
 		solicitud.valorSolicitud_id = valor_aceptado.id
-		comentario = body.get("comentario", "")
-		if comentario:
-			solicitud.comentario = comentario
+		nuevo_comentario = body.get("comentario", "")
+		if nuevo_comentario:
+			# Si hay un comentario existente
+			if solicitud.comentario:
+				# Si tiene salto de línea, reemplazar lo anterior al salto de línea
+				if "\n" in solicitud.comentario:
+					parte_despues_salto = solicitud.comentario.split("\n", 1)[1]
+					solicitud.comentario = f"{nuevo_comentario}\n{parte_despues_salto}"
+				else:
+					# Si no tiene salto de línea, concatenar con salto de línea
+					solicitud.comentario = f"{nuevo_comentario}\n{solicitud.comentario}"
+			else:
+				# Si no hay comentario previo, solo poner el nuevo
+				solicitud.comentario = nuevo_comentario
 	else:
 		raise HTTPException(status_code=400, detail="valorSolicitud debe ser ACEPTADO o RECHAZADO")
 	
