@@ -16,6 +16,7 @@ from typing import List
 
 from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha
 from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada
+from ..utils.solicitudes_flujo import aceptar_rechazar_solicitud_subdirectores
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
 # Endpoint generico para crear solicitudes de alumno o programa
@@ -245,7 +246,7 @@ def abrir_solicitudes_aprobacion_jp(
 	
 	# Buscar todas las solicitudes APROBACION_JP del usuario para la propuesta
 	solicitudes = db.query(SolicitudModel).filter(
-		(SolicitudModel.idUsuarioGenerador == id_usuario),
+		SolicitudModel.idUsuarioGenerador == id_usuario,
 		SolicitudModel.idPropuesta == id_propuesta
 	).all()
 	
@@ -268,3 +269,46 @@ def abrir_solicitudes_aprobacion_jp(
 		"idUsuario": id_usuario,
 		"idPropuesta": id_propuesta
 	}
+
+@router.patch("/solicitudesSubdirectores")
+def editar_solicitud_subdirectores(
+	body: dict = Body(
+		...,
+		example={
+			"ACEPTADO": {
+				"idSolicitud": 10,
+				"valorSolicitud": "ACEPTADO",
+				"comentario": "Solicitud aprobada por subdirector"
+			},
+			"RECHAZADO": {
+				"idSolicitud": 10,
+				"valorSolicitud": "RECHAZADO",
+				"comentario": "Solicitud rechazada, requiere revisión"
+			}
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Endpoint para que subdirectores acepten o rechacen solicitudes de tipo APROBACION_JP y APROBACION_COMERCIAL.
+	
+	- Si es RECHAZADO: cambia 'abierta' a True (para que vuelva a aparecer en la lista)
+	- Si es ACEPTADO: cambia 'valorSolicitud' a ACEPTADO
+	"""
+	idSolicitud = body.get("idSolicitud")
+	
+	if not idSolicitud:
+		return {"error": "Se requiere idSolicitud"}
+	
+	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
+	
+	if not solicitud:
+		return {"error": "Solicitud no encontrada"}
+	
+	tipo_solicitud = solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else None
+	
+	# Validar que sea una solicitud de subdirector
+	if tipo_solicitud not in ["APROBACION_JP", "APROBACION_COMERCIAL"]:
+		return {"error": "Este endpoint solo maneja solicitudes de tipo APROBACION_JP y APROBACION_COMERCIAL"}
+	
+	return aceptar_rechazar_solicitud_subdirectores(body, db, solicitud)
