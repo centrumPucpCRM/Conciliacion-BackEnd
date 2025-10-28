@@ -44,16 +44,15 @@ def obtener_resumen_propuesta(
 @router.get("/estados")
 def obtener_estados_propuesta(db: Session = Depends(get_db)):
     """
-    Obtiene todos los estados de propuesta disponibles con sus IDs y nombres.
-    Útil para frontend para mostrar opciones de filtrado.
+    Obtiene el conteo de propuestas por categoría de estado.
+    
+    Returns:
+        - activos: conteo de propuestas en estados activos (todos excepto CONCILIADA y CANCELADA)
+        - conciliadas: conteo de propuestas en estado CONCILIADA
+        - canceladas: conteo de propuestas en estado CANCELADA
     """
-    estados = PropuestaFilterService.get_available_states(db)
-    estado_lov = PropuestaFilterService.get_estado_lov()
-    return {
-        "estados": estados,
-        "estado_lov": estado_lov,
-        "excluidos_por_defecto": PropuestaFilterService.EXCLUDED_STATES_BY_DEFAULT
-    }
+    counts = PropuestaFilterService.get_estado_counts(db)
+    return counts
 
 
 @router.get("/listar", response_model=PropuestaListadoPage)

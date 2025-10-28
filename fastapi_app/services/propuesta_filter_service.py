@@ -136,4 +136,34 @@ class PropuestaFilterService:
             else:
                 errors.append(f"Estado '{estado_name}' no existe. Estados válidos: {', '.join(cls.ESTADO_LOV.keys())}")
         
-        return valid_names, errors
+    @classmethod
+    def get_estado_counts(cls, db_session) -> dict:
+        """
+        Get counts of propuestas by state category.
+        
+        Args:
+            db_session: SQLAlchemy database session
+            
+        Returns:
+            Dictionary with counts for activos, conciliadas, and canceladas
+        """
+        # Contar propuestas activas (todos los estados excepto CONCILIADA y CANCELADA)
+        activos_count = db_session.query(Propuesta).join(EstadoPropuesta).filter(
+            ~EstadoPropuesta.nombre.in_(cls.EXCLUDED_STATES_BY_DEFAULT)
+        ).count()
+        
+        # Contar propuestas conciliadas
+        conciliadas_count = db_session.query(Propuesta).join(EstadoPropuesta).filter(
+            EstadoPropuesta.nombre == "CONCILIADA"
+        ).count()
+        
+        # Contar propuestas canceladas
+        canceladas_count = db_session.query(Propuesta).join(EstadoPropuesta).filter(
+            EstadoPropuesta.nombre == "CANCELADA"
+        ).count()
+        
+        return {
+            "activos": activos_count,
+            "conciliadas": conciliadas_count,
+            "canceladas": canceladas_count
+        }
