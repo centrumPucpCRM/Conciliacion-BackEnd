@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import load_only, selectinload
 from sqlalchemy import or_
-from typing import List
+from typing import List, Optional
 from ..database import get_db
 from ..models.propuesta import Propuesta
 from ..models.cartera import Cartera
@@ -11,6 +11,7 @@ from ..models.solicitud import ValorSolicitud, TipoSolicitud
 from ..models.usuario import Usuario
 from ..models.rol_permiso import Rol
 from ..schemas.propuesta import PropuestaListadoPage
+from ..services.propuesta_filter_service import PropuestaFilterService
 from datetime import datetime
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
@@ -40,6 +41,21 @@ def obtener_resumen_propuesta(
     }
 
 
+@router.get("/estados")
+def obtener_estados_propuesta(db: Session = Depends(get_db)):
+    """
+    Obtiene todos los estados de propuesta disponibles con sus IDs y nombres.
+    Útil para frontend para mostrar opciones de filtrado.
+    """
+    estados = PropuestaFilterService.get_available_states(db)
+    estado_lov = PropuestaFilterService.get_estado_lov()
+    return {
+        "estados": estados,
+        "estado_lov": estado_lov,
+        "excluidos_por_defecto": PropuestaFilterService.EXCLUDED_STATES_BY_DEFAULT
+    }
+
+
 @router.get("/listar", response_model=PropuestaListadoPage)
 def listar_propuestas(
     page: int = Query(1, ge=1),
@@ -47,14 +63,35 @@ def listar_propuestas(
     fechaDesde: str = Query(None, description="Fecha desde (YYYY-MM-DD)", alias="fechaDesde"),
     fechaHasta: str = Query(None, description="Fecha hasta (YYYY-MM-DD)", alias="fechaHasta"),
     nombre: str = Query(None, description="Filtrar por nombre de propuesta (búsqueda parcial)", alias="nombre"),
+    estado: Optional[List[str]] = Query(None, description="Filtrar por nombres de estado de propuesta (ej: CONCILIADA, CANCELADA)", alias="estado"),
     db: Session = Depends(get_db),
 ):
-    # Query base con carga de relaciones necesarias
+    """
+    Lista propuestas con filtros aplicados.
+    
+    Reglas de filtrado de estados:
+    - Sin parámetro estado: muestra todas las propuestas excepto CONCILIADA y CANCELADA
+    - Con parámetro estado: muestra únicamente las propuestas de los estados especificados
+    
+    Estados disponibles: PROGRAMADA, GENERADA, PRECONCILIADA, APROBADA, CONCILIADA, CANCELADA
+    """
+    # Validar nombres de estado si se proporcionan
+    if estado:
+        valid_estado_names, errors = PropuestaFilterService.validate_state_names(estado)
+        if errors:
+            raise HTTPException(status_code=400, detail=f"Estados inválidos: {', '.join(errors)}")
+        estado_names = valid_estado_names
+    else:
+        estado_names = None
 
+    # Query base con carga de relaciones necesarias
     base_query = db.query(Propuesta).options(
         selectinload(Propuesta.estadoPropuesta),
         selectinload(Propuesta.carteras).load_only(Cartera.nombre),
     )
+
+    # Aplicar filtro de estados usando el servicio
+    base_query = PropuestaFilterService.apply_state_filter(base_query, estado_names)
 
     # Filtrado por fechas
     if fechaDesde:
