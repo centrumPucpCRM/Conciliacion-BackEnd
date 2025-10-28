@@ -38,7 +38,7 @@ def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Se
     Retorna lista de solicitudes con su estado abierta (bool).
     """
     solicitudes = db.query(SolicitudModel).filter(
-        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        ((SolicitudModel.idUsuarioGenerador == id_usuario)),
         SolicitudModel.idPropuesta == id_propuesta
     ).all()
     

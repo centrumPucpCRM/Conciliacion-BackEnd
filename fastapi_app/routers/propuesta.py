@@ -147,78 +147,14 @@ def avanzar_estado_propuesta(
 ):
     """
     Avanza el estado de la propuesta en +1
-    Validaciones:
-    - Si el usuario es JP: cierra todas sus solicitudes aceptadas (abierta=False)
-    - Al final, independientemente del rol: verifica que no haya solicitudes abiertas pendientes antes de avanzar el estado
     """
-    id_usuario = body.get("idUsuario")
     propuesta_id = body.get("idPropuesta")
-    # Buscar usuario y sus roles
-    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    
+    # Buscar propuesta
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
-    # Verificar roles del usuario
-    roles_usuario = [rol.nombre for rol in usuario.roles]
     
-    # Si el usuario es JP (no es DAF)
-    if "daf.supervisor" not in roles_usuario:
-        # Buscar todas las solicitudes del usuario para esta propuesta que NO son de tipo APROBACION_JP
-        solicitudes_usuario = db.query(SolicitudModel).join(ValorSolicitud).join(
-            TipoSolicitud, SolicitudModel.tipoSolicitud
-        ).filter(
-            or_(
-                SolicitudModel.idUsuarioReceptor == id_usuario,
-                SolicitudModel.idUsuarioGenerador == id_usuario
-            ),
-            SolicitudModel.idPropuesta == propuesta_id,
-            SolicitudModel.abierta == True,
-            TipoSolicitud.nombre != "APROBACION_JP"
-        ).all()
-        
-        if solicitudes_usuario:
-            # Verificar si TODAS las solicitudes están en estado ACEPTADO
-            todas_aceptadas = all(solicitud.valorSolicitud.nombre == "ACEPTADO" for solicitud in solicitudes_usuario)
-            
-            if todas_aceptadas:
-                # Cerrar todas las solicitudes
-                for solicitud in solicitudes_usuario:
-                    solicitud.abierta = False
-                db.commit()
-            else:
-                print(f"Usuario JP: tiene {len(solicitudes_usuario)} solicitud(es) pero NO todas están aceptadas. No se cierran.")
-        else:
-            print(f"Usuario JP: no tiene solicitudes abiertas (excepto APROBACION_JP) para esta propuesta")
-    
-    # VALIDACIÓN FINAL: Verificar que TODAS las solicitudes del usuario DAF estén ACEPTADAS
-    # Solo validar si el estado de la propuesta NO es "GENERADA"
-    if propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre == "PRECONCILIADA":
-        # Buscar usuarios con rol DAF - Supervisor
-        usuarios_daf = db.query(Usuario).join(Usuario.roles).filter(
-            Rol.nombre == "DAF - Supervisor"
-        ).all()
-        if usuarios_daf:
-            # Verificar si algún usuario DAF tiene solicitudes que NO están aceptadas
-            for usuario_daf in usuarios_daf:
-                # Buscar TODAS las solicitudes abiertas del usuario DAF para esta propuesta
-                solicitudes_daf = db.query(SolicitudModel).join(ValorSolicitud).filter(
-                    or_(
-                        SolicitudModel.idUsuarioReceptor == usuario_daf.id,
-                        SolicitudModel.idUsuarioGenerador == usuario_daf.id
-                    ),
-                    SolicitudModel.idPropuesta == propuesta_id,
-                ).all()
-                if solicitudes_daf:
-                    # Verificar que TODAS estén en estado ACEPTADO
-                    todas_aceptadas_daf = all(solicitud.valorSolicitud.nombre == "ACEPTADO" for solicitud in solicitudes_daf)
-                    
-                    if not todas_aceptadas_daf:
-                        # Contar cuántas NO están aceptadas
-                        no_aceptadas = [s for s in solicitudes_daf if s.valorSolicitud.nombre != "ACEPTADO"]
-                        return {
-                            "msg": f"No se puede avanzar el estado. El usuario DAF '{usuario_daf.nombre}' tiene {len(no_aceptadas)} solicitud(es) que NO están aceptadas. Todas deben estar en estado ACEPTADO."
-                        }
-        print(f"Validación final pasada: todos los usuarios DAF tienen todas sus solicitudes aceptadas")
-    else:
-        print(f"Estado de propuesta es GENERADA, se omite validación de solicitudes DAF")
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
     
     # Incrementar el estado en +1
     nuevo_estado_id = propuesta.estadoPropuesta_id + 1
