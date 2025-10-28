@@ -386,6 +386,13 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 conciliado = sanitize_bool(row.get('oportunidad.conciliado', False))
                 posibleAtipico = bool(row.get('oportunidad.posibleAtipico', False))
                 idPrograma = programas_dict.get(programa_codigo).id if programa_codigo in programas_dict else None
+                
+                # Marcar automáticamente como becado si:
+                # - El monto es menor a 10, O
+                # - El descuento es mayor a 0.99 (99%)
+                if monto < 10 or descuento > 0.99:
+                    becado = True
+                
                 oportunidad = Oportunidad(
                     nombre=oportunidad_nombre,
                     documentoIdentidad=documentoIdentidad,
@@ -633,15 +640,18 @@ def cargar_csv(data):
     return df
 
 def crearRelacionCarteraSubdirectoresYDAF(db: Session, df: pd.DataFrame, propuesta: Propuesta) -> None:
-    # Nombres de usuarios clave
-    nombres_usuarios = ["daf.supervisor","daf.subdirector",
-        "admin","Jefe grado","Jefe ee","Jefe CentrumX"]
+    # Roles de usuarios clave que deben tener acceso a todas las carteras
+    roles_clave = [
+        "DAF - Supervisor",
+        "Comercial - Subdirector",
+        "Administrador",
+        "DAF - Subdirector"
+    ]
 
-    # Buscar usuarios por nombre (ignorando mayúsculas/minúsculas y espacios)
-    usuarios = db.query(Usuario).filter(
-        Usuario.nombre.in_([n.strip() for n in nombres_usuarios])
-    ).all()
-    usuarios_dict = {u.nombre.strip().lower(): u for u in usuarios}
+    # Buscar usuarios por roles
+    usuarios = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(roles_clave)
+    ).distinct().all()
 
     carteras_col = 'cartera.nombre'
 
@@ -649,8 +659,8 @@ def crearRelacionCarteraSubdirectoresYDAF(db: Session, df: pd.DataFrame, propues
     carteras = db.query(Cartera).filter(Cartera.nombre.in_(nombres_carteras)).all()
     carteras_dict = {c.nombre.strip(): c for c in carteras}
 
-    # Asignar todas las carteras a cada usuario clave
-    for usuario in usuarios_dict.values():
+    # Asignar todas las carteras a cada usuario con los roles clave
+    for usuario in usuarios:
         for cartera in carteras_dict.values():
             if cartera not in usuario.carteras:
                 usuario.carteras.append(cartera)

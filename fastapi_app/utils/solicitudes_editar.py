@@ -273,3 +273,85 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 		"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
 		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" else None
 	}
+
+def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
+	"""
+	Maneja la aceptación/rechazo de solicitudes de tipo ELIMINACION_POSIBLE_BECADO.
+	Si es ACEPTADO: marca la oportunidad como eliminada
+	Si es RECHAZADO: intercambia generador/receptor para que vuelva al JP
+	"""
+	valor_solicitud_nombre = body.get("valorSolicitud")
+	
+	if not valor_solicitud_nombre:
+		raise HTTPException(status_code=400, detail="Se requiere valorSolicitud (ACEPTADO o RECHAZADO)")
+	
+	# Buscar la relación solicitud_x_oportunidad
+	sxo = db.query(SolicitudXOportunidad).filter_by(idSolicitud=solicitud.id).first()
+	if not sxo:
+		raise HTTPException(status_code=400, detail="No se encontró la relación con oportunidad")
+	
+	# Buscar la oportunidad
+	oportunidad = db.query(Oportunidad).filter_by(id=sxo.idOportunidad).first()
+	if not oportunidad:
+		raise HTTPException(status_code=400, detail="Oportunidad no encontrada")
+	
+	if valor_solicitud_nombre == "ACEPTADO":
+		# DAF acepta la solicitud: marcar oportunidad como eliminada
+		oportunidad.eliminado = True
+		
+		comentario_aceptado = body.get("comentario", "")
+		if comentario_aceptado:
+			solicitud.comentario = f"{comentario_aceptado}\nBeca eliminada exitosamente por DAF"
+		else:
+			solicitud.comentario = "Beca eliminada exitosamente por DAF"
+			
+	elif valor_solicitud_nombre == "RECHAZADO":
+		# DAF rechaza: intercambiar generador y receptor para devolver al JP
+		usuario_rechaza = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre if usuario_rechaza else 'DAF'} rechazó la eliminación de la beca\n"
+		
+		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
+		
+		comentario_base = body.get("comentario", "")
+		solicitud.comentario = comentario_base + comentario_rechazo
+	else:
+		raise HTTPException(status_code=400, detail="valorSolicitud debe ser ACEPTADO o RECHAZADO")
+	
+	solicitud.creadoEn = datetime.now()
+	
+	# Actualizar valor de solicitud
+	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
+	if not valor_solicitud_obj:
+		raise HTTPException(status_code=400, detail=f"ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
+	
+	solicitud.valorSolicitud_id = valor_solicitud_obj.id
+	
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud': valor_solicitud_nombre,
+			'tipo_solicitud': 'ELIMINACION_POSIBLE_BECADO',
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idOportunidad': sxo.idOportunidad,
+			'oportunidad_eliminada': oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	
+	db.commit()
+	return {
+		"msg": f"Solicitud ELIMINACION_POSIBLE_BECADO {valor_solicitud_nombre.lower()}",
+		"idSolicitud": solicitud.id,
+		"valorSolicitud": valor_solicitud_nombre,
+		"idOportunidad": sxo.idOportunidad,
+		"oportunidadEliminada": oportunidad.eliminado
+	}

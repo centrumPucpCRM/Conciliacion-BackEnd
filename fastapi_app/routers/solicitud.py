@@ -14,8 +14,8 @@ from fastapi import Body
 from sqlalchemy.orm import Session
 from typing import List
 
-from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha
-from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada
+from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha, crear_solicitud_ELIMINACION_POSIBLE_BECADO
+from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada, aceptar_rechazar_ELIMINACION_POSIBLE_BECADO
 from ..utils.solicitudes_flujo import aceptar_rechazar_solicitud_subdirectores
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
@@ -89,15 +89,6 @@ def crear_solicitud_generica(
 			return crear_solicitud_alumno(body, db)
 		elif tipo_solicitud == "EDICION_ALUMNO":
 			return crear_solicitud_alumno(body, db)
-		elif tipo_solicitud == "ELIMINACION_BECADO":
-			oportunidad.eliminado = True
-			db.commit()
-			return {"msg": "Oportunidad marcada como eliminada", "idOportunidad": id_oportunidad}
-		elif tipo_solicitud == "ELIMINACION_BECADO_REVERTIR":
-			oportunidad.eliminado = False
-			db.commit()
-			return {"msg": "Oportunidad revertida a no eliminada", "idOportunidad": id_oportunidad}
-			
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			return crear_solicitud_programa(body, db)
@@ -158,13 +149,14 @@ def editar_solicitud_generica(
 		if tipo_solicitud == "AGREGAR_ALUMNO":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "EDICION_ALUMNO":
-			pass
 			return aceptar_rechazar_edicion_alumno(body, db,solicitud)
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
 		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "FECHA_CAMBIADA":
 			return aceptar_rechazar_fecha_cambiada(body, db,solicitud)
+	elif tipo_solicitud == "ELIMINACION_BECADO":
+		return aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud)
 	return
 
 @router.post("/crearLote")
@@ -201,7 +193,9 @@ def crear_solicitudes_lote(
 	becas_eliminadas = body.get("becas_eliminadas", [])
 	for idx, item in enumerate(becas_eliminadas):
 		try:
+			tipo_solicitud = item.get("tipo_solicitud")
 			id_oportunidad = item.get("idOportunidad")
+			
 			if not id_oportunidad:
 				raise ValueError("Falta campo obligatorio: idOportunidad")
 			
@@ -209,14 +203,18 @@ def crear_solicitudes_lote(
 			if not oportunidad:
 				raise ValueError(f"Oportunidad {id_oportunidad} no encontrada")
 			
-			oportunidad.eliminado = True
-			oportunidad.montoPropuesto = 0
-			db.commit()
-			
-			resultados["becas_eliminadas"].append({
-				"msg": "Oportunidad marcada como eliminada",
-				"idOportunidad": id_oportunidad
-			})
+			# Si el tipo es ELIMINACION_POSIBLE_BECADO, crear solicitud formal
+			if tipo_solicitud == "ELIMINACION_POSIBLE_BECADO":
+				res = crear_solicitud_ELIMINACION_POSIBLE_BECADO(item, db)
+				resultados["becas_eliminadas"].append(res)
+			# Si es ELIMINACION_BECADO (sin solicitud), marcar como eliminado directamente
+			else:
+				oportunidad.eliminado = True
+				db.commit()
+				resultados["becas_eliminadas"].append({
+					"msg": "Oportunidad marcada como eliminada",
+					"idOportunidad": id_oportunidad
+				})
 		except Exception as e:
 			print(f"Error en becas_eliminadas[{idx}]: {e}")
 			resultados["errores"].append({"item": item, "error": str(e)})

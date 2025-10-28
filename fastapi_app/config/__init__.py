@@ -9,5 +9,3 @@ __all__ = [
     "USUARIOS_ACCESO_TOTAL",
     "MAPEO_USUARIOS_SUBDIRECCIONES"
 ]
-
-

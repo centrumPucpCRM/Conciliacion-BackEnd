@@ -74,8 +74,8 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
         Rol.nombre.in_(["DAF - Subdirector", "Comercial - Subdirector"])
     ).all()
     ids_subdirectores = {u.id for u in subdirectores}
-    
-    tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO"}
+
+    tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_POSIBLE_BECADO"}
     tipo_programa = {"EXCLUSION_PROGRAMA","FECHA_CAMBIADA"}
     solicitudes = db.query(SolicitudModel).filter(
         ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),

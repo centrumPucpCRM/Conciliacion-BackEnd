@@ -315,3 +315,99 @@ def crear_solicitud_fecha(body, db):
 	db.add(log)
 	db.commit()
 	return {"msg": "Solicitud FECHA_CAMBIADA creada", "id": solicitud.id}
+
+def crear_solicitud_ELIMINACION_POSIBLE_BECADO(body, db):
+	"""
+	Crea una solicitud de tipo ELIMINACION_POSIBLE_BECADO.
+	El JP solicita a DAF eliminar la beca de un alumno.
+	"""
+	required_fields = ["idOportunidad", "comentario", "tipo_solicitud"]
+	for field in required_fields:
+		if body.get(field) is None:
+			raise HTTPException(status_code=400, detail=f"Falta campo obligatorio: {field}")
+	
+	id_oportunidad = body["idOportunidad"]
+	comentario = body["comentario"]
+	
+	# Buscar la oportunidad para obtener datos actuales
+	oportunidad = db.query(Oportunidad).filter_by(id=id_oportunidad).first()
+	if not oportunidad:
+		raise HTTPException(status_code=400, detail="Oportunidad no encontrada")
+	
+	id_programa = oportunidad.idPrograma
+	
+	# Obtener programa para idPropuesta y obtener JP y DAF
+	programa = db.query(Programa).filter_by(id=id_programa).first()
+	if not programa:
+		raise HTTPException(status_code=400, detail="Programa no encontrado")
+	
+	id_propuesta = programa.idPropuesta
+	id_usuario_generador = programa.idJefeProducto  # JP que hace la solicitud
+	
+	# Buscar usuario DAF Supervisor como receptor
+	usuario_daf = db.query(Usuario).filter(Usuario.nombre == "daf.supervisor").first()
+	if not usuario_daf:
+		raise HTTPException(status_code=400, detail="Usuario DAF Supervisor no encontrado")
+	
+	id_usuario_receptor = usuario_daf.id
+	
+	# Obtener tipo de solicitud ELIMINACION_POSIBLE_BECADO
+	tipo_solicitud_obj = db.query(TipoSolicitud).filter_by(nombre="ELIMINACION_POSIBLE_BECADO").first()
+	if not tipo_solicitud_obj:
+		raise HTTPException(status_code=400, detail="Tipo de solicitud ELIMINACION_POSIBLE_BECADO no encontrado")
+	
+	# Obtener valor PENDIENTE
+	valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
+	if not valor_pendiente:
+		raise HTTPException(status_code=400, detail="Valor de solicitud PENDIENTE no encontrado")
+	
+	# Crear la solicitud
+	solicitud = SolicitudModel(
+		idUsuarioGenerador=id_usuario_generador,
+		idUsuarioReceptor=id_usuario_receptor,
+		tipoSolicitud_id=tipo_solicitud_obj.id,
+		valorSolicitud_id=valor_pendiente.id,
+		idPropuesta=id_propuesta,
+		comentario=comentario,
+		creadoEn=datetime.now(),
+		abierta=True
+	)
+	db.add(solicitud)
+	db.flush()
+	
+	# Crear relación solicitud x oportunidad
+	solicitud_x_oportunidad = SolicitudXOportunidad(
+		idSolicitud=solicitud.id,
+		idOportunidad=id_oportunidad,
+		montoPropuesto=oportunidad.monto,
+		montoObjetado=None
+	)
+	db.add(solicitud_x_oportunidad)
+	db.flush()
+	
+	# Crear log de auditoría
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': solicitud.creadoEn,
+		'auditoria': {
+			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
+			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
+			'idPropuesta': solicitud.idPropuesta,
+			'comentario': solicitud.comentario,
+			'abierta': solicitud.abierta,
+			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'idOportunidad': id_oportunidad,
+			'montoPropuesto': oportunidad.monto,
+			'tipo_solicitud': "ELIMINACION_POSIBLE_BECADO",
+		}
+	}
+	log = Log(**log_data)
+	db.add(log)
+	db.commit()
+	
+	return {
+		"msg": "Solicitud ELIMINACION_POSIBLE_BECADO creada exitosamente",
+		"idSolicitud": solicitud.id,
+		"idOportunidad": id_oportunidad
+	}

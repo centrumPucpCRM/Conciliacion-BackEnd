@@ -23,7 +23,7 @@ def listar_por_usuario(
     Sistema de permisos en 3 niveles:
     - Nivel 1: Usuarios con acceso total (admin, daf.supervisor, daf.subdirector)
       ven todas las subdirecciones del sistema.
-    - Nivel 2: Usuarios con subdirecciones específicas (Jefe grado, Jefe ee, Jefe CentrumX)
+    - Nivel 2: Usuarios con subdirecciones específicas
       ven solo sus subdirecciones asignadas.
     - Nivel 3: Otros usuarios ven subdirecciones donde son jefes de producto.
     

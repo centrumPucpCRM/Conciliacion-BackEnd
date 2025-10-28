@@ -16,4 +16,3 @@ MAPEO_USUARIOS_SUBDIRECCIONES = {
     "Jefe ee": ["Educacion Ejecutiva"],
     "Jefe CentrumX": ["CentrumX"]
 }
-
