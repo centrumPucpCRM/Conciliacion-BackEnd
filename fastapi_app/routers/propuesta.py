@@ -76,7 +76,13 @@ def listar_propuestas(
     """
     # Validar nombres de estado si se proporcionan
     if estado:
-        valid_estado_names, errors = PropuestaFilterService.validate_state_names(estado)
+        # Asegurar que estado sea una lista
+        if isinstance(estado, str):
+            estado_list = [estado]
+        else:
+            estado_list = estado
+        
+        valid_estado_names, errors = PropuestaFilterService.validate_state_names(estado_list)
         if errors:
             raise HTTPException(status_code=400, detail=f"Estados inválidos: {', '.join(errors)}")
         estado_names = valid_estado_names

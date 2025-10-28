@@ -136,6 +136,8 @@ class PropuestaFilterService:
             else:
                 errors.append(f"Estado '{estado_name}' no existe. Estados válidos: {', '.join(cls.ESTADO_LOV.keys())}")
         
+        return valid_names, errors
+        
     @classmethod
     def get_estado_counts(cls, db_session) -> dict:
         """
