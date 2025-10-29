@@ -56,11 +56,11 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 				if oportunidad:
 					if not solicitud.invertido:
 						# Comportamiento normal: ACEPTAR = Agregar alumno
-						oportunidad.etapaVentaPropuesta = "Agregado"
+						oportunidad.etapaVentaPropuesta = "3 - Matrícula"
 						body["comentario"] = body.get("comentario", "") + "\nAlumno agregado exitosamente"
 					else:
 						# Comportamiento invertido: ACEPTAR = NO agregar (acepta rechazo previo)
-						oportunidad.etapaVentaPropuesta = "No agregado"
+						oportunidad.etapaVentaPropuesta = oportunidad.etapaDeVentas
 						body["comentario"] = body.get("comentario", "") + "\nAlumno NO agregado (se aceptó el rechazo previo)"
 					db.add(oportunidad)
 	
@@ -73,7 +73,7 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 		usuario_rechaza = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
 		
 		# Construir mensaje de rechazo
-		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre if usuario_rechaza else 'Usuario'} rechazó la solicitud de tipo {tipo_solicitud} (lógica invertida: {solicitud.invertido})\n"
+		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre if usuario_rechaza else 'Usuario'} rechazó la solicitud de tipo {tipo_solicitud}\n"
 		
 		# Intercambiar generador y receptor para ping-pong
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
