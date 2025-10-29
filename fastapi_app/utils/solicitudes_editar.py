@@ -276,9 +276,12 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 
 def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	"""
-	Maneja la aceptación/rechazo de solicitudes de tipo ELIMINACION_POSIBLE_BECADO.
-	Si es ACEPTADO: marca la oportunidad como eliminada
-	Si es RECHAZADO: intercambia generador/receptor para que vuelva al JP
+	Maneja la aceptación/rechazo de solicitudes de tipo ELIMINACION_POSIBLE_BECADO con lógica invertida.
+	
+	Lógica:
+	- ACEPTADO con invertido=False: Elimina al alumno (comportamiento normal)
+	- ACEPTADO con invertido=True: NO elimina al alumno (comportamiento invertido - acepta el rechazo previo)
+	- RECHAZADO: Solo invierte el flag e intercambia roles (NO toca al alumno, permite ping-pong)
 	"""
 	valor_solicitud_nombre = body.get("valorSolicitud")
 	
@@ -295,25 +298,38 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	if not oportunidad:
 		raise HTTPException(status_code=400, detail="Oportunidad no encontrada")
 	
+	# Obtener usuario que realiza la acción
+	usuario_actual = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	nombre_usuario = usuario_actual.nombre if usuario_actual else "Usuario"
+	
+	accion_realizada = ""
+	
 	if valor_solicitud_nombre == "ACEPTADO":
-		# DAF acepta la solicitud: marcar oportunidad como eliminada
-		oportunidad.eliminado = True
+		# Solo aquí se toma la decisión de eliminar o no según el flag invertido
+		if not solicitud.invertido:
+			# Comportamiento normal: ACEPTAR = ELIMINAR
+			oportunidad.eliminado = True
+			accion_realizada = f"Beca eliminada por {nombre_usuario}"
+		else:
+			# Comportamiento invertido: ACEPTAR = NO ELIMINAR (acepta el rechazo previo)
+			oportunidad.eliminado = False
+			accion_realizada = f"Beca NO eliminada - {nombre_usuario} aceptó el rechazo previo"
 		
 		comentario_aceptado = body.get("comentario", "")
-		if comentario_aceptado:
-			solicitud.comentario = f"{comentario_aceptado}\nBeca eliminada exitosamente por DAF"
-		else:
-			solicitud.comentario = "Beca eliminada exitosamente por DAF"
+		solicitud.comentario = f"{comentario_aceptado}\n{accion_realizada}"
 			
 	elif valor_solicitud_nombre == "RECHAZADO":
-		# DAF rechaza: intercambiar generador y receptor para devolver al JP
-		usuario_rechaza = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
-		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre if usuario_rechaza else 'DAF'} rechazó la eliminación de la beca\n"
+		# Solo invertir el flag e intercambiar roles, NO tocar al alumno
+		solicitud.invertido = not solicitud.invertido
 		
+		comentario_rechazo = f"\nEl usuario {nombre_usuario} rechazó la solicitud (lógica invertida: {solicitud.invertido})\n"
+		
+		# Intercambiar generador y receptor para ping-pong
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
 		
 		comentario_base = body.get("comentario", "")
 		solicitud.comentario = comentario_base + comentario_rechazo
+		accion_realizada = "Solicitud rechazada - flag invertido"
 	else:
 		raise HTTPException(status_code=400, detail="valorSolicitud debe ser ACEPTADO o RECHAZADO")
 	
@@ -341,7 +357,9 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 			'tipo_solicitud': 'ELIMINACION_POSIBLE_BECADO',
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
 			'idOportunidad': sxo.idOportunidad,
+			'invertido': solicitud.invertido,
 			'oportunidad_eliminada': oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
+			'accion_realizada': accion_realizada,
 		}
 	}
 	log = Log(**log_data)
@@ -353,5 +371,7 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 		"idSolicitud": solicitud.id,
 		"valorSolicitud": valor_solicitud_nombre,
 		"idOportunidad": sxo.idOportunidad,
-		"oportunidadEliminada": oportunidad.eliminado
+		"invertido": solicitud.invertido,
+		"oportunidadEliminada": oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
+		"accionRealizada": accion_realizada
 	}

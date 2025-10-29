@@ -23,6 +23,7 @@ class Solicitud(Base):
     idPropuesta = Column(Integer, ForeignKey('propuesta.id'))
     comentario = Column(String(255))
     creadoEn = Column(DateTime)
+    invertido = Column(Boolean, default=False)  # Flag para controlar lógica invertida en rechazos
     tipoSolicitud = relationship('TipoSolicitud')
     valorSolicitud = relationship('ValorSolicitud')
     propuesta = relationship('Propuesta')
