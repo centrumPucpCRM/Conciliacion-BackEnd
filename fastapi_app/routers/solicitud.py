@@ -144,7 +144,7 @@ def editar_solicitud_generica(
 	idSolicitud = body.get("idSolicitud")
 	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
 	tipo_solicitud = solicitud.tipoSolicitud.nombre
-
+	print(body)
 	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_BECADO","ELIMINACION_BECADO_REVERTIR"]:
 		if tipo_solicitud == "AGREGAR_ALUMNO":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
@@ -164,6 +164,7 @@ def crear_solicitudes_lote(
 	body: dict = Body(...),
 	db: Session = Depends(get_db)
 ):
+	print(body)
 	resultados = {"alumnos_aniadido": [], "alumnos_edicion": [], "programas_eliminar": [], "becas_eliminadas": [], "errores": []}
 	# Procesar alumnos añadidos
 	alumnos_aniadido = body.get("alumnos_aniadido", [])

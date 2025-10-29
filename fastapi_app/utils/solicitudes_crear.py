@@ -342,14 +342,21 @@ def crear_solicitud_ELIMINACION_POSIBLE_BECADO(body, db):
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
 	
 	id_propuesta = programa.idPropuesta
-	id_usuario_generador = programa.idJefeProducto  # JP que hace la solicitud
 	
-	# Buscar usuario DAF Supervisor como receptor
-	usuario_daf = db.query(Usuario).filter(Usuario.nombre == "daf.supervisor").first()
-	if not usuario_daf:
-		raise HTTPException(status_code=400, detail="Usuario DAF Supervisor no encontrado")
-	
-	id_usuario_receptor = usuario_daf.id
+	# Aplicar la misma lógica que EDICION_ALUMNO
+	if body.get("idUsuario"):
+		if str(body.get("idUsuario"))=="2" or str(body.get("idUsuario"))=="1":
+			# Si es DAF quien crea la solicitud, DAF es generador y JP es receptor
+			id_usuario_generador = "1"
+			id_usuario_receptor = programa.idJefeProducto
+		else:
+			# Si es JP quien crea la solicitud, JP es generador y DAF es receptor
+			id_usuario_generador = body.get("idUsuario")
+			id_usuario_receptor = "1"
+	else:
+		# Por defecto: JP es generador, DAF es receptor
+		id_usuario_generador = programa.idJefeProducto
+		id_usuario_receptor = "1"
 	
 	# Obtener tipo de solicitud ELIMINACION_POSIBLE_BECADO
 	tipo_solicitud_obj = db.query(TipoSolicitud).filter_by(nombre="ELIMINACION_POSIBLE_BECADO").first()
