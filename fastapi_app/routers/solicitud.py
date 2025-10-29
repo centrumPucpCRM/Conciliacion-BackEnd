@@ -145,8 +145,8 @@ def editar_solicitud_generica(
 	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
 	tipo_solicitud = solicitud.tipoSolicitud.nombre
 	print(body)
-	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_POSIBLE_BECADO"]:
-		if tipo_solicitud == "AGREGAR_ALUMNO" or tipo_solicitud == "ELIMINACION_POSIBLE_BECADO":
+	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO"]:
+		if tipo_solicitud == "AGREGAR_ALUMNO":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "EDICION_ALUMNO":
 			return aceptar_rechazar_edicion_alumno(body, db,solicitud)
@@ -155,7 +155,7 @@ def editar_solicitud_generica(
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "FECHA_CAMBIADA":
 			return aceptar_rechazar_fecha_cambiada(body, db,solicitud)
-	elif tipo_solicitud == "ELIMINACION_BECADO":
+	elif tipo_solicitud == "ELIMINACION_POSIBLE_BECADO":
 		return aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud)
 	return
 
