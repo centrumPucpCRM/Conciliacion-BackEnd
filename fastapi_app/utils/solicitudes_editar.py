@@ -194,13 +194,12 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 
 def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 	"""
-	Acepta o rechaza una solicitud de tipo FECHA_CAMBIADA.
+	Acepta o rechaza una solicitud de tipo FECHA_CAMBIADA con lógica de ping-pong invertida.
 	
-	Lógica:
-	- ACEPTAR: Se acepta la fecha propuesta (fechaInaguracionPropuesta o fechaInaguracionObjetada si existe)
-	  y se actualiza el programa con esa fecha.
-	- RECHAZAR: Se intercambian roles, se propone una nueva fecha que pasa a ser fechaInaguracionObjetada
-	  (o se intercambian las fechas si ya existe una objetada).
+	Lógica ping-pong:
+	- ACEPTADO con invertido=False: Aplica la fecha propuesta al programa (comportamiento normal)
+	- ACEPTADO con invertido=True: NO aplica la fecha propuesta (comportamiento invertido - acepta rechazo)
+	- RECHAZADO: Invierte flag, intercambia roles y propone nueva fecha (permite ping-pong)
 	"""
 	valor_solicitud_nombre = body.get("valorSolicitud")
 	
@@ -214,8 +213,28 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 	if not programa:
 		raise HTTPException(status_code=400, detail="Programa no encontrado")
 	
-	# Si se RECHAZA, intercambiar generador y receptor y manejar fechas
-	if valor_solicitud_nombre == "RECHAZADO":
+	accion_realizada = ""
+	
+	# CASO: ACEPTADO - Aplicar lógica según flag invertido
+	if valor_solicitud_nombre == "ACEPTADO":
+		# Determinar qué fecha usar (objetada tiene prioridad si existe)
+		fecha_a_aplicar = sxp.fechaInaguracionObjetada if sxp.fechaInaguracionObjetada else sxp.fechaInaguracionPropuesta
+		
+		if not solicitud.invertido:
+			# Comportamiento normal: ACEPTAR = Aplicar la fecha propuesta
+			if fecha_a_aplicar:
+				programa.fechaInaguracionPropuesta = fecha_a_aplicar
+				accion_realizada = f"Fecha {fecha_a_aplicar} aplicada al programa"
+		else:
+			# Comportamiento invertido: ACEPTAR = NO aplicar fecha (mantener fecha original)
+			# No se modifica programa.fechaInaguracionPropuesta
+			accion_realizada = f"Fecha NO modificada - se aceptó el rechazo del cambio de fecha"
+	
+	# CASO: RECHAZADO - Invertir flag e intercambiar roles, proponer nueva fecha
+	elif valor_solicitud_nombre == "RECHAZADO":
+		# Invertir el flag
+		solicitud.invertido = not solicitud.invertido
+		
 		# Intercambiar roles
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
 		
@@ -232,15 +251,8 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 		else:
 			# Primera vez que se rechaza, la fecha propuesta pasa a objetada
 			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
-	
-	# Si se ACEPTA, aplicar la fecha al programa
-	elif valor_solicitud_nombre == "ACEPTADO":
-		# Si hay fecha objetada, aceptamos esa (es la última propuesta)
-		# Si no, aceptamos la fecha propuesta original
-		fecha_a_aplicar = sxp.fechaInaguracionObjetada if sxp.fechaInaguracionObjetada else sxp.fechaInaguracionPropuesta
 		
-		if fecha_a_aplicar:
-			programa.fechaInaguracionPropuesta = fecha_a_aplicar
+		accion_realizada = f"Solicitud rechazada - nueva fecha objetada: {nueva_fecha_objetada}"
 	
 	# Construir comentario
 	comentario = body.get("comentario", "")
@@ -256,6 +268,7 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 		)
 		if sxp.fechaInaguracionObjetada:
 			solicitud.comentario += f"\nFecha Objetada por {nombre_generador}: {sxp.fechaInaguracionObjetada}"
+		solicitud.comentario += f"\n{accion_realizada}"
 	
 	solicitud.creadoEn = datetime.now()
 	
@@ -284,9 +297,11 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
 			'idPrograma': sxp.idPrograma,
+			'invertido': solicitud.invertido,
 			'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
 			'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-			'fechaAplicadaAlPrograma': str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" else None,
+			'fechaAplicadaAlPrograma': str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
+			'accion_realizada': accion_realizada,
 		}
 	}
 	log = Log(**log_data)
@@ -298,9 +313,11 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 		"idSolicitud": solicitud.id,
 		"valorSolicitud": valor_solicitud_nombre,
 		"idPrograma": programa.id,
+		"invertido": solicitud.invertido,
 		"fechaInaguracionPropuesta": str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
 		"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" else None
+		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
+		"accionRealizada": accion_realizada
 	}
 
 def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
