@@ -56,7 +56,7 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 				if oportunidad:
 					if not solicitud.invertido:
 						# Comportamiento normal: ACEPTAR = Agregar alumno
-						oportunidad.etapaVentaPropuesta = "3 - Matrícula"
+						oportunidad.etapaVentaPropuesta = "Agregado"
 						body["comentario"] = body.get("comentario", "") + "\nAlumno agregado exitosamente"
 					else:
 						# Comportamiento invertido: ACEPTAR = NO agregar (acepta rechazo previo)
