@@ -120,7 +120,7 @@ def listar_propuestas(
     offset = (page - 1) * size
 
     propuestas: List[Propuesta] = (
-        base_query.order_by(Propuesta.creadoEn.desc()).offset(offset).limit(size).all()
+        base_query.order_by(Propuesta.id.desc()).offset(offset).limit(size).all()
     )
 
     items = [
