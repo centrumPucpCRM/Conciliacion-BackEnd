@@ -148,14 +148,14 @@ def editar_solicitud_generica(
 	if tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO"]:
 		if tipo_solicitud == "AGREGAR_ALUMNO":
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
-		elif tipo_solicitud == "EDICION_ALUMNO":
+		elif tipo_solicitud == "EDICION_ALUMNO":#EDICION_ALUMNO
 			return aceptar_rechazar_edicion_alumno(body, db,solicitud)
 	elif tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
-		if tipo_solicitud == "EXCLUSION_PROGRAMA":
+		if tipo_solicitud == "EXCLUSION_PROGRAMA": 
 			return aceptar_rechazar_solicitud_basico(body, db,solicitud)
 		elif tipo_solicitud == "FECHA_CAMBIADA":
 			return aceptar_rechazar_fecha_cambiada(body, db,solicitud)
-	elif tipo_solicitud == "ELIMINACION_POSIBLE_BECADO":
+	elif tipo_solicitud == "ELIMINACION_POSIBLE_BECADO": #OK
 		return aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud)
 	return
 

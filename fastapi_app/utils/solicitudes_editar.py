@@ -12,50 +12,77 @@ from fastapi import  HTTPException
 
 
 def aceptar_rechazar_solicitud_basico(body, db, solicitud):
+	"""
+	Maneja aceptación/rechazo de solicitudes básicas con lógica de ping-pong invertida.
+	
+	Aplica a:
+	- EXCLUSION_PROGRAMA: Control de apertura de programas
+	- AGREGAR_ALUMNO: Control de agregación de alumnos
+	
+	Lógica ping-pong:
+	- ACEPTADO con invertido=False: Comportamiento normal (excluir/no agregar)
+	- ACEPTADO con invertido=True: Comportamiento invertido (incluir/agregar)
+	- RECHAZADO: Invierte flag e intercambia roles (permite ping-pong)
+	"""
 	valor_solicitud_nombre = body.get("valorSolicitud")
 	id_usuario_receptor = solicitud.idUsuarioReceptor
-	# Lógica especial cuando se acepta una solicitud previamente rechazada
-	if valor_solicitud_nombre == "ACEPTADO" and solicitud.valorSolicitud.nombre == "RECHAZADO":
-		# Caso 1: EXCLUSION_PROGRAMA - DAF supervisor aprueba apertura del programa
-		if solicitud.tipoSolicitud.nombre == "EXCLUSION_PROGRAMA" and id_usuario_receptor in [1, 2]:
-			# Buscar la relación solicitud_x_programa
+	tipo_solicitud = solicitud.tipoSolicitud.nombre
+	
+	# CASO: ACEPTADO - Aplicar lógica según flag invertido
+	if valor_solicitud_nombre == "ACEPTADO":
+		# Caso 1: EXCLUSION_PROGRAMA
+		if tipo_solicitud == "EXCLUSION_PROGRAMA":
 			sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
 			if sxp:
-				# Buscar el programa y cambiar noAperturar a False (se permite aperturar)
 				programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
 				if programa:
-					programa.noAperturar = False
-					programa.noCalcular = False
+					if not solicitud.invertido:
+						# Comportamiento normal: ACEPTAR exclusión = NO aperturar
+						programa.noAperturar = True
+						programa.noCalcular = True
+						body["comentario"] = body.get("comentario", "") + "\nPrograma excluido - no se aperturará"
+					else:
+						# Comportamiento invertido: ACEPTAR = SÍ aperturar (acepta rechazo de exclusión)
+						programa.noAperturar = False
+						programa.noCalcular = False
+						body["comentario"] = body.get("comentario", "") + "\nPrograma incluido - se aperturará (se aceptó el rechazo de exclusión)"
 					db.add(programa)
-					# Actualizar el comentario
-					body["comentario"] = "\nEl programa se va a aperturar ya que DAF lo aprobó"
-					
-		# Caso 2: AGREGAR_ALUMNO - JP acepta el rechazo (marca como "No agregado")
-		if solicitud.tipoSolicitud.nombre == "AGREGAR_ALUMNO" and id_usuario_receptor not in [1, 2]:
-			# Buscar la relación solicitud_x_oportunidad
+		
+		# Caso 2: AGREGAR_ALUMNO
+		elif tipo_solicitud == "AGREGAR_ALUMNO":
 			sxo = db.query(SolicitudXOportunidad).filter_by(idSolicitud=solicitud.id).first()
 			if sxo:
-				# Buscar la oportunidad y cambiar etapaVentaPropuesta a "No agregado"
 				oportunidad = db.query(Oportunidad).filter_by(id=sxo.idOportunidad).first()
 				if oportunidad:
-					oportunidad.etapaVentaPropuesta = "No agregado"
+					if not solicitud.invertido:
+						# Comportamiento normal: ACEPTAR = Agregar alumno
+						oportunidad.etapaVentaPropuesta = "Agregado"
+						body["comentario"] = body.get("comentario", "") + "\nAlumno agregado exitosamente"
+					else:
+						# Comportamiento invertido: ACEPTAR = NO agregar (acepta rechazo previo)
+						oportunidad.etapaVentaPropuesta = "No agregado"
+						body["comentario"] = body.get("comentario", "") + "\nAlumno NO agregado (se aceptó el rechazo previo)"
 					db.add(oportunidad)
-					body["comentario"] = "\nEl Alumno no fue agregado ya que DAF no lo autorizó y se aceptó esto"
-
 	
-	if valor_solicitud_nombre == "RECHAZADO":
+	# CASO: RECHAZADO - Solo invertir flag e intercambiar roles
+	elif valor_solicitud_nombre == "RECHAZADO":
+		# Invertir el flag para la próxima iteración
+		solicitud.invertido = not solicitud.invertido
+		
 		# Obtener información del usuario que rechaza
 		usuario_rechaza = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
-		tipo_solicitud = solicitud.tipoSolicitud.nombre
+		
 		# Construir mensaje de rechazo
-		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre} rechazó la solicitud de tipo {tipo_solicitud}\n"
-		# Intercambiar generador y receptor
+		comentario_rechazo = f"\nEl usuario {usuario_rechaza.nombre if usuario_rechaza else 'Usuario'} rechazó la solicitud de tipo {tipo_solicitud} (lógica invertida: {solicitud.invertido})\n"
+		
+		# Intercambiar generador y receptor para ping-pong
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
 		
 		# Agregar el comentario de rechazo
 		comentario_base = body.get("comentario", "")
 		body["comentario"] = comentario_base + comentario_rechazo
-	#
+	
+	# Actualizar comentario y timestamp
 	comentario = body.get("comentario")
 	if comentario:
 		solicitud.comentario = comentario
@@ -77,12 +104,9 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 			'comentario': solicitud.comentario,
 			'abierta': solicitud.abierta,
 			'valorSolicitud': valor_solicitud_nombre,
-			'idPropuesta': solicitud.idPropuesta,
-			'abierta': solicitud.abierta,
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
-			'idPropuesta': solicitud.idPropuesta,
-			'abierta': solicitud.abierta,
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
+			'invertido': solicitud.invertido,
 			'montoPropuesto': None,
 			'montoObjetado': None,
 		}
@@ -91,7 +115,12 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	db.add(log)
 
 	db.commit()
-	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
+	return {
+		"msg": "Solicitud actualizada correctamente",
+		"idSolicitud": solicitud.id,
+		"valorSolicitud": valor_solicitud_nombre,
+		"invertido": solicitud.invertido
+	}
 
 def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	valor_solicitud_nombre = body.get("valorSolicitud")
