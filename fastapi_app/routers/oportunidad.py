@@ -7,6 +7,8 @@ from ..database import get_db
 from ..models.oportunidad import Oportunidad
 from ..models.solicitud import Solicitud as SolicitudModel, ValorSolicitud
 from ..models.solicitud_x_oportunidad import SolicitudXOportunidad
+from ..models.programa import Programa
+from ..schemas.solicitud import SolicitudOportunidad
 
 router = APIRouter(prefix="/oportunidad", tags=["Oportunidad"])
 
@@ -183,4 +185,98 @@ def listar_oportunidades_disponibles(
         "page": page,
         "size": size,
         "pages": pages,
+    }
+
+
+@router.get("/solicitudes")
+def obtener_solicitudes_oportunidad(
+    id_oportunidad: int = Query(..., alias="id_oportunidad"),
+    db: Session = Depends(get_db),
+):
+    """
+    Obtiene todas las solicitudes relacionadas a una oportunidad específica.
+    Retorna lista de solicitudes con información detallada.
+    """
+    # Obtener todas las solicitudes relacionadas con la oportunidad
+    solicitudes = db.query(SolicitudModel).join(
+        SolicitudXOportunidad, SolicitudModel.id == SolicitudXOportunidad.idSolicitud
+    ).filter(
+        SolicitudXOportunidad.idOportunidad == id_oportunidad
+    ).order_by(SolicitudModel.id.desc()).all()
+    
+    # Definir tipos de solicitudes de oportunidad
+    tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_POSIBLE_BECADO"}
+    
+    # Agrupar solicitudes por tipo
+    solicitudes_por_tipo = {}
+    
+    for s in solicitudes:
+        # Obtener la relación solicitud_x_oportunidad
+        sxo = db.query(SolicitudXOportunidad).filter_by(idSolicitud=s.id).first()
+        
+        if sxo:
+            # Obtener información de la oportunidad
+            oportunidad_db = db.query(Oportunidad).filter_by(id=sxo.idOportunidad).first()
+            
+            oportunidad_info = None
+            programa_info = None
+            
+            if oportunidad_db:
+                # Información básica de la oportunidad
+                oportunidad_info = {
+                    "idOportunidad": sxo.idOportunidad,
+                    "nombre": oportunidad_db.nombre,
+                    "dni": oportunidad_db.documentoIdentidad,
+                }
+                
+                # Agregar información de montos solo para EDICION_ALUMNO
+                tipo_solicitud = s.tipoSolicitud.nombre if s.tipoSolicitud else None
+                if tipo_solicitud == "EDICION_ALUMNO":
+                    oportunidad_info.update({
+                        "montoPropuesto": sxo.montoPropuesto,
+                        "montoObjetado": sxo.montoObjetado,
+                        "monto": oportunidad_db.monto,
+                        "montoPropuestoOportunidad": oportunidad_db.montoPropuesto,
+                    })
+                
+                # Obtener información del programa asociado
+                if oportunidad_db.idPrograma:
+                    programa_db = db.query(Programa).filter_by(id=oportunidad_db.idPrograma).first()
+                    if programa_db:
+                        programa_info = {
+                            "idPrograma": programa_db.id,
+                            "fechaInaguracionPropuesta": None,
+                            "fechaInaguracionObjetada": None,
+                            "nombre": programa_db.nombre
+                        }
+            
+            solicitud_info = {
+                "id": s.id,
+                "idUsuarioReceptor": s.idUsuarioReceptor,
+                "idUsuarioGenerador": s.idUsuarioGenerador,
+                "abierta": s.abierta,
+                "tipoSolicitud": s.tipoSolicitud.nombre if s.tipoSolicitud else None,
+                "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+                "idPropuesta": s.idPropuesta,
+                "comentario": s.comentario,
+                "creadoEn": s.creadoEn,
+                "oportunidad": oportunidad_info,
+                "programa": programa_info
+            }
+            
+            # Agrupar por tipo de solicitud
+            tipo_solicitud = s.tipoSolicitud.nombre if s.tipoSolicitud else "OTROS"
+            
+            if tipo_solicitud not in solicitudes_por_tipo:
+                solicitudes_por_tipo[tipo_solicitud] = []
+            
+            solicitudes_por_tipo[tipo_solicitud].append(solicitud_info)
+    
+    # Calcular totales
+    total_solicitudes = sum(len(solicitudes) for solicitudes in solicitudes_por_tipo.values())
+    
+    return {
+        "solicitudes_por_tipo": solicitudes_por_tipo,
+        "total": total_solicitudes,
+        "tipos_disponibles": list(solicitudes_por_tipo.keys())
     }
