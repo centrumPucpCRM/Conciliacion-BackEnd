@@ -321,7 +321,7 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 		# Solo invertir el flag e intercambiar roles, NO tocar al alumno
 		solicitud.invertido = not solicitud.invertido
 		
-		comentario_rechazo = f"\nEl usuario {nombre_usuario} rechazó la solicitud (lógica invertida: {solicitud.invertido})\n"
+		comentario_rechazo = f"\nEl usuario {nombre_usuario} rechazó la solicitud\n"
 		
 		# Intercambiar generador y receptor para ping-pong
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
