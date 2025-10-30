@@ -203,116 +203,50 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
 
 def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
-	"""
-	Acepta o rechaza una solicitud de tipo FECHA_CAMBIADA con lógica de ping-pong invertida.
-	
-	Lógica ping-pong:
-	- ACEPTADO con invertido=False: Aplica la fecha propuesta al programa (comportamiento normal)
-	- ACEPTADO con invertido=True: NO aplica la fecha propuesta (comportamiento invertido - acepta rechazo)
-	- RECHAZADO: Invierte flag, intercambia roles y propone nueva fecha (permite ping-pong)
-	"""
 	valor_solicitud_nombre = body.get("valorSolicitud")
-	print(f"[LOG] valorSolicitud recibido: {valor_solicitud_nombre}")
-
-	# Buscar la relación SolicitudXPrograma
 	sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
-	print(f"[LOG] sxp encontrado: {sxp}")
-	if not sxp:
-		print("[ERROR] No se encontró la relación solicitud-programa")
-		raise HTTPException(status_code=400, detail="No se encontró la relación solicitud-programa")
-
-	# Obtener el programa
-	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
-	print(f"[LOG] programa encontrado: {programa}")
-	if not programa:
-		print("[ERROR] Programa no encontrado")
-		raise HTTPException(status_code=400, detail="Programa no encontrado")
-
-	accion_realizada = ""
-
-	# CASO: ACEPTADO - Aplicar lógica según flag invertido
-	if valor_solicitud_nombre == "ACEPTADO":
-		print(f"[LOG] Entrando a ACEPTADO, invertido={solicitud.invertido}")
-		# Determinar qué fecha usar (objetada tiene prioridad si existe)
-		fecha_a_aplicar = sxp.fechaInaguracionObjetada if sxp.fechaInaguracionObjetada else sxp.fechaInaguracionPropuesta
-		print(f"[LOG] Fecha a aplicar: {fecha_a_aplicar}")
-
-		if not solicitud.invertido:
-			# Comportamiento normal: ACEPTAR = Aplicar la fecha propuesta
-			if fecha_a_aplicar:
-				programa.fechaInaguracionPropuesta = fecha_a_aplicar
-				accion_realizada = f"Fecha {fecha_a_aplicar} aplicada al programa"
-				print(f"[LOG] {accion_realizada}")
-		else:
-			# Comportamiento invertido: ACEPTAR = NO aplicar fecha (mantener fecha original)
-			# No se modifica programa.fechaInaguracionPropuesta
-			accion_realizada = f"Fecha NO modificada - se aceptó el rechazo del cambio de fecha"
-			print(f"[LOG] {accion_realizada}")
-
-	# CASO: RECHAZADO - Invertir flag e intercambiar roles, proponer nueva fecha
-	elif valor_solicitud_nombre == "RECHAZADO":
-		print(f"[LOG] Entrando a RECHAZADO, invertido actual={solicitud.invertido}")
-		# Invertir el flag
-		solicitud.invertido = not solicitud.invertido
-		print(f"[LOG] invertido ahora={solicitud.invertido}")
-
-		# Intercambiar roles
+	
+	if valor_solicitud_nombre == "RECHAZADO":
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
-		print(f"[LOG] Intercambiados generador/receptor: gen={solicitud.idUsuarioGenerador}, rec={solicitud.idUsuarioReceptor}")
-
-		# Obtener la nueva fecha propuesta del body (obligatoria al rechazar)
-		nueva_fecha_objetada = body.get("fechaInaguracionPropuesta")
-		print(f"[LOG] Nueva fecha objetada recibida: {nueva_fecha_objetada}")
-		if not nueva_fecha_objetada:
-			print("[ERROR] Debe proporcionar una fecha al rechazar (fechaInaguracionPropuesta)")
-			raise HTTPException(status_code=400, detail="Debe proporcionar una fecha al rechazar (fechaInaguracionPropuesta)")
-
-		# Manejar intercambio de fechas
+		# Buscar la relación SolicitudXPrograma
 		if sxp.fechaInaguracionObjetada:
-			# Ya había una fecha objetada, intercambiar
-			print(f"[LOG] Intercambiando fechas: propuesta={sxp.fechaInaguracionPropuesta}, objetada={sxp.fechaInaguracionObjetada}")
 			sxp.fechaInaguracionPropuesta = sxp.fechaInaguracionObjetada
-			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
+			sxp.fechaInaguracionObjetada = body.get("fechaInaguracionPropuesta")
 		else:
-			# Primera vez que se rechaza, la fecha propuesta pasa a objetada
-			print(f"[LOG] Primera vez rechazado, seteando objetada={nueva_fecha_objetada}")
-			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
-
-		accion_realizada = f"Solicitud rechazada"
-		print(f"[LOG] {accion_realizada}")
-
-	# Construir comentario
-	comentario = body.get("comentario", "")
+			sxp.fechaInaguracionObjetada = body.get("fechaInaguracionPropuesta")
+	
+	# Actualizar la fechaInaguracionPropuesta en Programa si corresponde
+	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+	if sxp.fechaInaguracionObjetada:
+		programa.fechaInaguracionPropuesta = sxp.fechaInaguracionObjetada
+	else:
+		programa.fechaInaguracionPropuesta = sxp.fechaInaguracionPropuesta
+	
+	comentario = body.get("comentario")
 	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
 	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
 	nombre_generador = usuario_generador.nombre if usuario_generador else "-"
 	nombre_receptor = usuario_receptor.nombre if usuario_receptor else "-"
-
+	
 	if comentario:
-		print(f"[LOG] Comentario base: {comentario}")
 		solicitud.comentario = (
 			comentario
-			+ f"\nFecha Propuesta por {nombre_receptor}: {sxp.fechaInaguracionPropuesta}"
+			+ f" \n Fecha Propuesta por  {nombre_receptor} : " + str(sxp.fechaInaguracionPropuesta)
+			+ f" \n Fecha Objetada por  {nombre_generador} : " + str(sxp.fechaInaguracionObjetada)
 		)
-		if sxp.fechaInaguracionObjetada:
-			solicitud.comentario += f"\nFecha Objetada por {nombre_generador}: {sxp.fechaInaguracionObjetada}"
-		solicitud.comentario += f"\n{accion_realizada}"
-
+	
 	solicitud.creadoEn = datetime.now()
-	print(f"[LOG] Timestamp actualizado: {solicitud.creadoEn}")
 
-	# Actualizar valor de solicitud
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	print(f"[LOG] valorSolicitud_obj: {valor_solicitud_obj}")
-	if not valor_solicitud_obj:
-		print(f"[ERROR] ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
-		raise HTTPException(status_code=400, detail=f"ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
-
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
-	print(f"[LOG] valorSolicitud_id actualizado: {solicitud.valorSolicitud_id}")
 
-	# Crear log de auditoría
+	# Obtener nombres de usuario generador y receptor
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	nombre_generador = usuario_generador.nombre if usuario_generador else None
+	nombre_receptor = usuario_receptor.nombre if usuario_receptor else None
+
 	log_data = {
 		'idSolicitud': solicitud.id,
 		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
@@ -329,30 +263,15 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
 			'idPrograma': sxp.idPrograma,
-			'invertido': solicitud.invertido,
-			'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
-			'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-			'fechaAplicadaAlPrograma': str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
-			'accion_realizada': accion_realizada,
+			'fechaInaguracionPropuesta': sxp.fechaInaguracionPropuesta,
+			'fechaInaguracionObjetada': sxp.fechaInaguracionObjetada,
 		}
 	}
-	print(f"[LOG] log_data: {log_data}")
 	log = Log(**log_data)
 	db.add(log)
 
 	db.commit()
-	print(f"[LOG] Commit realizado correctamente")
-	return {
-		"msg": "Solicitud de cambio de fecha actualizada correctamente",
-		"idSolicitud": solicitud.id,
-		"valorSolicitud": valor_solicitud_nombre,
-		"idPrograma": programa.id,
-		"invertido": solicitud.invertido,
-		"fechaInaguracionPropuesta": str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
-		"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
-		"accionRealizada": accion_realizada
-	}
+	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
 
 def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	"""
