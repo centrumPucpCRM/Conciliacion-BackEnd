@@ -263,8 +263,8 @@ def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
 			'valorSolicitud_id': solicitud.valorSolicitud_id,
 			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
 			'idPrograma': sxp.idPrograma,
-			'fechaInaguracionPropuesta': sxp.fechaInaguracionPropuesta,
-			'fechaInaguracionObjetada': sxp.fechaInaguracionObjetada,
+			'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
+			'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
 		}
 	}
 	log = Log(**log_data)
