@@ -410,6 +410,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     idPrograma=idPrograma,
                     idTipoCambio=id_tipo_cambio,
                     montoPropuesto=monto,
+                    descuentoPropuesto=descuento,
                     etapaVentaPropuesta=etapaDeVentas,
                     fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
                     posibleAtipico=posibleAtipico,

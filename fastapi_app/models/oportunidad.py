@@ -25,6 +25,7 @@ class Oportunidad(Base):
     idTipoCambio = Column(Integer, ForeignKey('tipo_cambio.id'))
     tipoCambio = relationship('TipoCambio')
     montoPropuesto = Column(Float)
+    descuentoPropuesto = Column(Float)
     etapaVentaPropuesta = Column(String(255))
     fechaMatriculaPropuesta = Column(Date)
     eliminado = Column(Boolean, default=False)

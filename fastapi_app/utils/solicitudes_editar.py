@@ -139,6 +139,16 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 		oportunidad.montoPropuesto = sxop.montoObjetado
 	else:
 		oportunidad.montoPropuesto = sxop.montoPropuesto
+	
+	# Calcular y actualizar descuentoPropuesto basado en el precio de lista del programa
+	if oportunidad and oportunidad.idPrograma:
+		programa = db.query(Programa).filter_by(id=oportunidad.idPrograma).first()
+		if programa and programa.precioDeLista and programa.precioDeLista > 0:
+			# Calcular el porcentaje de descuento: (precio_lista - monto_propuesto) / precio_lista
+			nuevo_descuento = (programa.precioDeLista - oportunidad.montoPropuesto) / programa.precioDeLista
+			# Asegurar que el descuento esté entre 0 y 1
+			nuevo_descuento = max(0, min(1, nuevo_descuento))
+			oportunidad.descuentoPropuesto = nuevo_descuento
 	comentario = body.get("comentario")
 	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
 	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
