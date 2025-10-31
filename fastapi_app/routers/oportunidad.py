@@ -110,6 +110,7 @@ def listar_oportunidades(
             "tipoCambioEquivalencia": r.tipoCambio.equivalencia if r.tipoCambio else None,
             "etapaVentaPropuesta": r.etapaVentaPropuesta,
             "editar": r.id not in oportunidades_con_solicitudes,  # True si NO tiene solicitudes
+            "vendedora":r.vendedora
         }
         for r in rows
     ]
@@ -173,6 +174,7 @@ def listar_oportunidades_disponibles(
             "tipoCambioEquivalencia": r.tipoCambio.equivalencia if r.tipoCambio else None,
             "etapaVentaPropuesta": r.etapaVentaPropuesta,
             "editar": r.id not in oportunidades_con_solicitudes,  # True si NO tiene solicitudes
+            "vendedora":r.vendedora
         }
         for r in rows
     ]
