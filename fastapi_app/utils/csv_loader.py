@@ -2,6 +2,7 @@
 import pandas as pd
 import datetime
 import math
+import pytz
 
 from typing import Dict, Any
 from sqlalchemy.orm import Session
@@ -449,8 +450,45 @@ def cargar_tipo_cambio(db):
             db.add(tipo_cambio)
             db.flush()
 
+def obtener_meses_validos():
+    """
+    Calcula los meses válidos basados en la fecha actual de Perú.
+    Retorna: mes_conciliado (mes anterior) y meses_anteriores (3 meses anteriores al conciliado)
+    """
+    # Obtener fecha actual en zona horaria de Perú
+    peru_tz = pytz.timezone('America/Lima')
+    fecha_actual = datetime.datetime.now(peru_tz)
+    
+    # Mes conciliado = mes anterior al actual
+    if fecha_actual.month == 1:
+        mes_conciliado = 12
+        año_conciliado = fecha_actual.year - 1
+    else:
+        mes_conciliado = fecha_actual.month - 1
+        año_conciliado = fecha_actual.year
+    
+    # Meses anteriores = 3 meses anteriores al mes conciliado
+    meses_anteriores = []
+    for i in range(1, 4):  # 1, 2, 3 meses antes del conciliado
+        if mes_conciliado - i <= 0:
+            mes_anterior = 12 + (mes_conciliado - i)
+            año_anterior = año_conciliado - 1
+        else:
+            mes_anterior = mes_conciliado - i
+            año_anterior = año_conciliado
+        meses_anteriores.append(f"{mes_anterior:02d}")
+    
+    return f"{mes_conciliado:02d}", meses_anteriores
+
 def crear_solicitudes_subdirectores(db, propuesta_unica):
     from fastapi_app.models.log import Log
+    
+    # Obtener meses válidos
+    mes_conciliado, meses_anteriores = obtener_meses_validos()
+    meses_validos = [mes_conciliado] + meses_anteriores
+    
+    print(f"[INFO] Creando solicitudes de subdirectores solo para programas con mes en: {meses_validos}")
+    
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     
@@ -465,6 +503,18 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     if not subdirectores:
         print(f"[WARNING] No se encontraron usuarios con rol 'Comercial - Subdirector'. Saltando creación de solicitudes.")
         return
+    
+    # Verificar que existen programas con meses válidos en esta propuesta
+    programas_validos = db.query(Programa).filter(
+        Programa.idPropuesta == propuesta_unica.id,
+        Programa.mes.in_(meses_validos)
+    ).count()
+    
+    if programas_validos == 0:
+        print(f"[INFO] No se encontraron programas con meses válidos ({meses_validos}) en la propuesta {propuesta_unica.id}. Saltando creación de solicitudes de subdirectores.")
+        return
+    
+    print(f"[INFO] Encontrados {programas_validos} programas con meses válidos para crear solicitudes de subdirectores.")
     
     solicitudes_bulk = []
     logs_bulk = []
@@ -518,19 +568,28 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
 def crear_solicitudes_Jp(db, propuesta_unica):
     from fastapi_app.models.log import Log
     
+    # Obtener meses válidos
+    mes_conciliado, meses_anteriores = obtener_meses_validos()
+    meses_validos = [mes_conciliado] + meses_anteriores
+    
+    print(f"[INFO] Creando solicitudes JP solo para programas con mes en: {meses_validos}")
+    
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     
-    # Obtener todos los programas de esta propuesta con JP y Subdirector asignados
+    # Obtener todos los programas de esta propuesta con JP y Subdirector asignados Y con meses válidos
     programas = db.query(Programa).filter(
         Programa.idPropuesta == propuesta_unica.id,
         Programa.idJefeProducto.isnot(None),
-        Programa.idSubdirector.isnot(None)
+        Programa.idSubdirector.isnot(None),
+        Programa.mes.in_(meses_validos)  # ✅ Filtrar solo programas con meses válidos
     ).all()
     
     if not programas:
-        print(f"[WARNING] No se encontraron programas con JP y Subdirector asignados. Saltando creación de solicitudes JP.")
+        print(f"[WARNING] No se encontraron programas con JP, Subdirector asignados y meses válidos ({meses_validos}). Saltando creación de solicitudes JP.")
         return
+    
+    print(f"[INFO] Encontrados {len(programas)} programas con meses válidos para crear solicitudes JP.")
     
     # Crear conjunto de combinaciones únicas (idJefeProducto, idSubdirector)
     combinaciones_unicas = set()
