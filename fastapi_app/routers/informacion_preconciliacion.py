@@ -187,6 +187,7 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             }
     
     # Si NO es JP pero es subdirector, filtrar solicitudes generales según el rol
+    print(roles_usuario)
     if id_usuario in ids_subdirectores:
         solicitudesGeneralesFiltradas = []
         
