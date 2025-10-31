@@ -187,7 +187,6 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             }
     
     # Si NO es JP pero es subdirector, filtrar solicitudes generales según el rol
-    print(roles_usuario)
     if id_usuario in ids_subdirectores:
         solicitudesGeneralesFiltradas = []
         
@@ -197,13 +196,16 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
                 s for s in solicitudesGenerales 
                 if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
             ]
-        if "Comercial - Subdirector" in roles_usuario:
+        elif "Comercial - Subdirector" in roles_usuario:
             # Solo mostrar APROBACION_JP
             solicitudesGeneralesFiltradas = [
                 s for s in solicitudesGenerales 
                 if s.get("tipoSolicitud") == "APROBACION_JP"
-            ]        
-        return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
+            ]
+        return {"solicitudesGenerales": solicitudesGeneralesFiltradas,
+                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
+                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma
+                }
     
     # Caso por defecto: devolver oportunidad/programa 
     return {
