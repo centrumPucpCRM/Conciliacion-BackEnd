@@ -174,3 +174,56 @@ def avanzar_estado_propuesta(
         "estadoNuevo": propuesta.estadoPropuesta_id,
         "nombreEstado": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None
     }
+
+
+@router.patch("/cancelar")
+def cancelar_propuesta(
+    body: dict = Body(..., example={"id": 1}),
+    db: Session = Depends(get_db),
+):
+    """
+    Cancela una propuesta cambiando su estado a CANCELADA
+    """
+    propuesta_id = body.get("id")
+    
+    if not propuesta_id:
+        raise HTTPException(status_code=400, detail="El campo 'id' es requerido")
+    
+    # Buscar el estado CANCELADA en la base de datos
+    from ..models.propuesta import EstadoPropuesta
+    estado_cancelada = db.query(EstadoPropuesta).filter(EstadoPropuesta.nombre == "CANCELADA").first()
+    
+    if not estado_cancelada:
+        raise HTTPException(status_code=500, detail="Estado CANCELADA no encontrado en la base de datos")
+    
+    # Buscar propuesta
+    propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
+    
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+    
+    # Verificar que la propuesta no esté ya cancelada
+    if propuesta.estadoPropuesta_id == estado_cancelada.id:
+        raise HTTPException(status_code=400, detail="La propuesta ya está cancelada")
+    
+    # Guardar estado anterior para la respuesta
+    estado_anterior_id = propuesta.estadoPropuesta_id
+    estado_anterior_nombre = propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None
+    
+    # Cambiar estado a CANCELADA
+    propuesta.estadoPropuesta_id = estado_cancelada.id
+    db.commit()
+    db.refresh(propuesta)
+    
+    return {
+        "msg": "Propuesta cancelada exitosamente",
+        "idPropuesta": propuesta.id,
+        "estadoAnterior": {
+            "id": estado_anterior_id,
+            "nombre": estado_anterior_nombre
+        },
+        "estadoNuevo": {
+            "id": propuesta.estadoPropuesta_id,
+            "nombre": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else "CANCELADA"
+        }
+    }
