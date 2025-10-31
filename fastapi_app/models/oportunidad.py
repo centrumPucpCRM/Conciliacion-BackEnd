@@ -29,3 +29,5 @@ class Oportunidad(Base):
     etapaVentaPropuesta = Column(String(255))
     fechaMatriculaPropuesta = Column(Date)
     eliminado = Column(Boolean, default=False)
+    vendedora = Column(String(255))
+

@@ -414,6 +414,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     etapaVentaPropuesta=etapaDeVentas,
                     fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
                     posibleAtipico=posibleAtipico,
+                    vendedora=row.get('oportunidad.vendedora')
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad
