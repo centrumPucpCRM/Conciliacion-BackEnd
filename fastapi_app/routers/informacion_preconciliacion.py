@@ -35,10 +35,11 @@ from fastapi_app.models.rol_permiso import Rol
 def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Session):
     """
     Obtiene solicitudes de tipo APROBACION_JP para un usuario y propuesta.
+    Busca donde el usuario sea RECEPTOR de las solicitudes (las que debe aprobar).
     Retorna lista de solicitudes con su estado abierta (bool).
     """
     solicitudes = db.query(SolicitudModel).filter(
-        ((SolicitudModel.idUsuarioGenerador == id_usuario)),
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
         SolicitudModel.idPropuesta == id_propuesta
     ).all()
     
@@ -50,7 +51,9 @@ def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Se
                 "abierta": s.abierta,
                 "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
                 "comentario": s.comentario,
-                "creadoEn": s.creadoEn
+                "creadoEn": s.creadoEn,
+                "idUsuarioGenerador": s.idUsuarioGenerador,
+                "idUsuarioReceptor": s.idUsuarioReceptor
             })
     
     return solicitudes_aprobacion_jp
@@ -503,8 +506,8 @@ def obtener_informacion_preconciliacion(
     if any(rol in roles_usuario for rol in ["DAF - Supervisor", "DAF - Subdirector"]) and estado_generada:
         response["verBotonPreconciliacion"] = True
     
-    # verBotonAprobacionSubComercial: Solo Jefes de Producto
-    if "Comercial - Jefe de producto" in roles_usuario:
+    # verBotonAprobacionSubComercial: Solo Jefes de Producto (pero no si es Subdirector Comercial)
+    if "Comercial - Jefe de producto" in roles_usuario and "Comercial - Subdirector" not in roles_usuario:
         response["verBotonAprobacionSubComercial"] = True
         
         # verBotonAprobacionFinalizar: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
@@ -522,11 +525,16 @@ def obtener_informacion_preconciliacion(
     
     # Lógica para Subdirector Comercial
     if "Comercial - Subdirector" in roles_usuario:
+        print(f"🔍 DEBUG SUB_COM: Usuario {id_usuario} es Comercial - Subdirector")
+        
         # Obtener solicitudes de tipo APROBACION_JP para este usuario y propuesta
         solicitudes_aprobacion_jp = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+        print(f"🔍 DEBUG SUB_COM: Solicitudes APROBACION_JP encontradas: {len(solicitudes_aprobacion_jp)}")
+        print(f"🔍 DEBUG SUB_COM: Solicitudes APROBACION_JP: {solicitudes_aprobacion_jp}")
         
         # Obtener solicitudes de tipo APROBACION_COMERCIAL para este usuario y propuesta
         solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
+        print(f"🔍 DEBUG SUB_COM: Solicitudes APROBACION_COMERCIAL encontradas: {len(solicitudes_aprobacion_comercial)}")
         
         # verBotonSolicitarSubdirectorDaf: Solo cuando estado_preconciliada = True
         if estado_preconciliada:
@@ -540,15 +548,20 @@ def obtener_informacion_preconciliacion(
         # Condición 1: Verificar solicitudes APROBACION_JP
         if solicitudes_aprobacion_jp:
             todas_jp_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_jp)
+            print(f"🔍 DEBUG SUB_COM: todas_jp_aceptadas = {todas_jp_aceptadas}")
             if not todas_jp_aceptadas:
                 bloquear_boton = True
+                print(f"🔍 DEBUG SUB_COM: Bloqueando por solicitudes JP no aceptadas")
         
         # Condición 2: Verificar solicitudes APROBACION_COMERCIAL con abierta=False
         if solicitudes_aprobacion_comercial:
             alguna_comercial_cerrada = any(not s["abierta"] for s in solicitudes_aprobacion_comercial)
+            print(f"🔍 DEBUG SUB_COM: alguna_comercial_cerrada = {alguna_comercial_cerrada}")
             if alguna_comercial_cerrada:
                 bloquear_boton = True
+                print(f"🔍 DEBUG SUB_COM: Bloqueando por solicitudes comerciales cerradas")
         
+        print(f"🔍 DEBUG SUB_COM: noEditarBotonSolicitarSubdirectorDaf = {bloquear_boton}")
         response["noEditarBotonSolicitarSubdirectorDaf"] = bloquear_boton
     
     # Lógica para DAF Subdirector
