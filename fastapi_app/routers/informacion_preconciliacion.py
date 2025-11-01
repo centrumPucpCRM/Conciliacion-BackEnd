@@ -217,51 +217,36 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             # Las solicitudes generales NO se modifican, mantienen los IDs originales
             solicitudesGenerales.append(solicitud_dict)
     
-    # Si el usuario tiene rol de Jefe de Producto, siempre devuelve solicitudes de oportunidad/programa
-    if es_jefe_producto:
-        # Si además tiene rol de Comercial - Subdirector, agregar APROBACION_JP filtradas
-        if "Comercial - Subdirector" in roles_usuario:
-            solicitudesGeneralesFiltradas = [
-                s for s in solicitudesGenerales 
-                if s.get("tipoSolicitud") == "APROBACION_JP"
-            ]
-            return {
-                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-                "solicitudesGenerales": solicitudesGeneralesFiltradas
-            }
-        else:
-            return {
-                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-            }
-    
-    # Si NO es JP pero es subdirector, filtrar solicitudes generales según el rol
-    if id_usuario in ids_subdirectores:
-        solicitudesGeneralesFiltradas = []
-        
-        if "DAF - Subdirector" in roles_usuario:
-            # Solo mostrar APROBACION_COMERCIAL
-            solicitudesGeneralesFiltradas = [
-                s for s in solicitudesGenerales 
-                if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
-            ]
-        elif "Comercial - Subdirector" in roles_usuario:
-            # Solo mostrar APROBACION_JP
-            solicitudesGeneralesFiltradas = [
-                s for s in solicitudesGenerales 
-                if s.get("tipoSolicitud") == "APROBACION_JP"
-            ]
-        return {"solicitudesGenerales": solicitudesGeneralesFiltradas,
-                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma
-                }
-    
-    # Caso por defecto: devolver oportunidad/programa 
-    return {
+    # Preparar respuesta base con solicitudes de oportunidad y programa
+    response_base = {
         "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
         "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
     }
+    
+    # Determinar qué solicitudes generales mostrar según los roles del usuario
+    solicitudesGeneralesFiltradas = []
+    tipos_solicitudes_permitidas = set()
+    
+    # Agregar tipos de solicitudes según cada rol que tenga el usuario
+    if "Comercial - Jefe de producto" in roles_usuario:
+        # Los JP pueden ver solicitudes de oportunidad/programa (ya incluidas en response_base)
+        pass
+    
+    if "Comercial - Subdirector" in roles_usuario:
+        tipos_solicitudes_permitidas.add("APROBACION_JP")
+    
+    if "DAF - Subdirector" in roles_usuario:
+        tipos_solicitudes_permitidas.add("APROBACION_COMERCIAL")
+    
+    # Filtrar solicitudes generales según los tipos permitidos
+    if tipos_solicitudes_permitidas:
+        solicitudesGeneralesFiltradas = [
+            s for s in solicitudesGenerales 
+            if s.get("tipoSolicitud") in tipos_solicitudes_permitidas
+        ]
+        response_base["solicitudesGenerales"] = solicitudesGeneralesFiltradas
+    
+    return response_base
 
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
