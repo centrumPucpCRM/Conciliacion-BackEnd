@@ -255,21 +255,45 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         mes_anterior = mes_conciliacion.month - 1
         anio_anterior = mes_conciliacion.year
     
-    # Obtener dinámicamente IDs de DAF y Subdirectores
-    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
-        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
-    ).all()
-    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    # Obtener el usuario y sus roles
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    roles_usuario = set()
+    if usuario and usuario.roles:
+        roles_usuario = {rol.nombre for rol in usuario.roles}
     
-    if id_usuario in ids_no_filtrar:
+    # Obtener dinámicamente IDs de DAF (acceso total)
+    usuarios_acceso_total = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector"])
+    ).all()
+    ids_acceso_total = {u.id for u in usuarios_acceso_total}
+    
+    if id_usuario in ids_acceso_total:
+        # DAF: acceso a todos los programas
         programas = db.query(Programa).filter(
             Programa.idPropuesta == id_propuesta
+        ).all()
+    elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+        # Usuario con rol de Subdirector y/o Jefe de Producto: concatenar ambos
+        from sqlalchemy import or_
+        
+        condiciones = []
+        
+        # Si es Subdirector Comercial, agregar programas donde es subdirector
+        if "Comercial - Subdirector" in roles_usuario:
+            condiciones.append(Programa.idSubdirector == id_usuario)
+        
+        # Si es Jefe de Producto, agregar programas donde es jefe de producto
+        if "Comercial - Jefe de producto" in roles_usuario:
+            condiciones.append(Programa.idJefeProducto == id_usuario)
+        
+        # Combinar condiciones con OR para obtener programas de ambos roles
+        programas = db.query(Programa).filter(
+            Programa.idPropuesta == id_propuesta,
+            or_(*condiciones)
         ).all()
     else:
-        programas = db.query(Programa).filter(
-            Programa.idJefeProducto == id_usuario,
-            Programa.idPropuesta == id_propuesta
-        ).all()
+        # Otros usuarios: sin acceso a programas
+        programas = []
     programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     oportunidades_all = db.query(Oportunidad).filter(
@@ -365,11 +389,17 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     total_monto = 0
     total_oportunidades = 0
     
-    # Obtener dinámicamente IDs de DAF y Subdirectores
-    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
-        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
+    # Obtener el usuario y sus roles
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    roles_usuario = set()
+    if usuario and usuario.roles:
+        roles_usuario = {rol.nombre for rol in usuario.roles}
+    
+    # Obtener dinámicamente IDs de DAF (acceso total)
+    usuarios_acceso_total = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector"])
     ).all()
-    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    ids_acceso_total = {u.id for u in usuarios_acceso_total}
     
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
     oportunidades_all = db.query(Oportunidad).filter(
@@ -409,15 +439,33 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
         while mes <= 0:
             mes += 12
             anio -= 1
-        if id_usuario in ids_no_filtrar:
+        if id_usuario in ids_acceso_total:
+            # DAF: acceso a todos los programas
             programas = db.query(Programa).filter(
                 Programa.idPropuesta == id_propuesta
+            ).all()
+        elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+            # Usuario con rol de Subdirector y/o Jefe de Producto: concatenar ambos
+            from sqlalchemy import or_
+            
+            condiciones = []
+            
+            # Si es Subdirector Comercial, agregar programas donde es subdirector
+            if "Comercial - Subdirector" in roles_usuario:
+                condiciones.append(Programa.idSubdirector == id_usuario)
+            
+            # Si es Jefe de Producto, agregar programas donde es jefe de producto
+            if "Comercial - Jefe de producto" in roles_usuario:
+                condiciones.append(Programa.idJefeProducto == id_usuario)
+            
+            # Combinar condiciones con OR para obtener programas de ambos roles
+            programas = db.query(Programa).filter(
+                Programa.idPropuesta == id_propuesta,
+                or_(*condiciones)
             ).all()
         else:
-            programas = db.query(Programa).filter(
-                Programa.idJefeProducto == id_usuario,
-                Programa.idPropuesta == id_propuesta
-            ).all()
+            # Otros usuarios: sin acceso a programas
+            programas = []
         programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes and p.fechaInaguracionPropuesta.year == anio]
         for p in programas_filtrados:
             # Excluir programas con noAperturar = True
@@ -484,10 +532,12 @@ def obtener_informacion_preconciliacion(
     estado_generada = False
     estado_propuesta_nombre = ""
     estado_preconciliada = False
+    estado_conciliada = False
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
         estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
         estado_generada = estado_propuesta_nombre == "GENERADA"
         estado_preconciliada = estado_propuesta_nombre == "PRECONCILIADA"
+        estado_conciliada = estado_propuesta_nombre == "CONCILIADA"
 
     # Obtener TODOS los roles del usuario
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
@@ -572,5 +622,10 @@ def obtener_informacion_preconciliacion(
         else:
             # Si no hay solicitudes APROBACION_COMERCIAL, permitir el botón
             response["noEditarBotonConciliar"] = False
+    
+    # Lógica para estado CONCILIADA - Bloquear todo
+    if estado_conciliada:
+        response["noVerBotones"] = True
+        response["noEditarNada"] = True
         
     return response
