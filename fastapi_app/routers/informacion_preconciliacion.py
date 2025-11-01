@@ -217,36 +217,57 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             # Las solicitudes generales NO se modifican, mantienen los IDs originales
             solicitudesGenerales.append(solicitud_dict)
     
-    # Preparar respuesta base con solicitudes de oportunidad y programa
-    response_base = {
-        "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-        "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-    }
+    # Determinar qué mostrar según las combinaciones específicas de roles
+    response = {}
     
-    # Determinar qué solicitudes generales mostrar según los roles del usuario
-    solicitudesGeneralesFiltradas = []
-    tipos_solicitudes_permitidas = set()
-    
-    # Agregar tipos de solicitudes según cada rol que tenga el usuario
+    # Caso 1: JP (solo o con Subdirector Comercial)
     if "Comercial - Jefe de producto" in roles_usuario:
-        # Los JP pueden ver solicitudes de oportunidad/programa (ya incluidas en response_base)
-        pass
+        # Siempre incluir oportunidades y programas para JP
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+        
+        # Si además es Subdirector Comercial, agregar APROBACION_JP
+        if "Comercial - Subdirector" in roles_usuario:
+            solicitudesGeneralesFiltradas = [
+                s for s in solicitudesGenerales 
+                if s.get("tipoSolicitud") == "APROBACION_JP"
+            ]
+            response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
     
-    if "Comercial - Subdirector" in roles_usuario:
-        tipos_solicitudes_permitidas.add("APROBACION_JP")
-    
-    if "DAF - Subdirector" in roles_usuario:
-        tipos_solicitudes_permitidas.add("APROBACION_COMERCIAL")
-    
-    # Filtrar solicitudes generales según los tipos permitidos
-    if tipos_solicitudes_permitidas:
+    # Caso 2: Solo Subdirector Comercial (sin JP)
+    elif "Comercial - Subdirector" in roles_usuario:
+        # Solo mostrar APROBACION_JP (no oportunidades ni programas)
         solicitudesGeneralesFiltradas = [
             s for s in solicitudesGenerales 
-            if s.get("tipoSolicitud") in tipos_solicitudes_permitidas
+            if s.get("tipoSolicitud") == "APROBACION_JP"
         ]
-        response_base["solicitudesGenerales"] = solicitudesGeneralesFiltradas
+        response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
     
-    return response_base
+    # Caso 3: DAF Subdirector (ya emula solicitudes con jugada de IDs)
+    elif "DAF - Subdirector" in roles_usuario:
+        # Incluir oportunidades y programas (con IDs ya modificados)
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+        
+        # Agregar APROBACION_COMERCIAL
+        solicitudesGeneralesFiltradas = [
+            s for s in solicitudesGenerales 
+            if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
+        ]
+        response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
+    
+    # Caso 4: DAF Supervisor
+    elif "DAF - Supervisor" in roles_usuario:
+        # Incluir oportunidades y programas
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+    
+    # Caso por defecto: otros roles
+    else:
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+    
+    return response
 
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
