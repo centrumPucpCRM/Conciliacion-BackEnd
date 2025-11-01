@@ -55,6 +55,32 @@ def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Se
     
     return solicitudes_aprobacion_jp
 
+def obtener_solicitudes_aprobacion_comercial(id_usuario: int, id_propuesta: int, db: Session):
+    """
+    Obtiene solicitudes de tipo APROBACION_COMERCIAL para un usuario y propuesta.
+    Para DAF Subdirector, busca donde sea RECEPTOR de las solicitudes.
+    Retorna lista de solicitudes con su estado abierta (bool).
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        SolicitudModel.idPropuesta == id_propuesta
+    ).all()
+    
+    solicitudes_aprobacion_comercial = []
+    for s in solicitudes:
+        if s.tipoSolicitud and s.tipoSolicitud.nombre == "APROBACION_COMERCIAL":
+            solicitudes_aprobacion_comercial.append({
+                "id": s.id,
+                "abierta": s.abierta,
+                "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+                "comentario": s.comentario,
+                "creadoEn": s.creadoEn,
+                "idUsuarioGenerador": s.idUsuarioGenerador,
+                "idUsuarioReceptor": s.idUsuarioReceptor
+            })
+    
+    return solicitudes_aprobacion_comercial
+
 def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     # Guardar el ID original del usuario
     id_usuario_original = id_usuario
@@ -446,16 +472,17 @@ def obtener_informacion_preconciliacion(
     propuesta = db.query(Propuesta).get(id_propuesta)
     estado_generada = False
     estado_propuesta_nombre = ""
+    estado_preconciliada = False
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
         estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
         estado_generada = estado_propuesta_nombre == "GENERADA"
         estado_preconciliada = estado_propuesta_nombre == "PRECONCILIADA"
 
-    # Obtener rol del usuario (cada usuario tiene máximo un rol)
+    # Obtener TODOS los roles del usuario
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
-    rol_usuario = None
+    roles_usuario = set()
     if usuario and usuario.roles:
-        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+        roles_usuario = {rol.nombre for rol in usuario.roles}
     
     response = {
         # "carteras": carteras,
@@ -465,11 +492,11 @@ def obtener_informacion_preconciliacion(
     if not estado_generada:
         response["solicitudes"] = solicitudes  
     # verBotonPreconciliacion: Solo DAF Supervisor o DAF Subdirector cuando estado == GENERADA
-    if rol_usuario in ["DAF - Supervisor", "DAF - Subdirector"] and estado_generada:
+    if any(rol in roles_usuario for rol in ["DAF - Supervisor", "DAF - Subdirector"]) and estado_generada:
         response["verBotonPreconciliacion"] = True
     
     # verBotonAprobacionSubComercial: Solo Jefes de Producto
-    if rol_usuario == "Comercial - Jefe de producto":
+    if "Comercial - Jefe de producto" in roles_usuario:
         response["verBotonAprobacionSubComercial"] = True
         
         # verBotonAprobacionFinalizar: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
@@ -481,7 +508,68 @@ def obtener_informacion_preconciliacion(
         solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
         if any(not s["abierta"] for s in solicitudes_aprobacion):
             response["verBotonAprobacionBloqueadoSubComercial"] = True
-    if (rol_usuario == "DAF - Supervisor" or rol_usuario == "DAF - Subdirector") and estado_preconciliada:
+    
+    if any(rol in roles_usuario for rol in ["DAF - Supervisor", "DAF - Subdirector"]) and estado_preconciliada:
         response["noEditarBotonSolicitarCambio"] = True
+    
+    # Lógica para Subdirector Comercial
+    if "Comercial - Subdirector" in roles_usuario:
+        # Obtener solicitudes de tipo APROBACION_JP para este usuario y propuesta
+        solicitudes_aprobacion_jp = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+        
+        # Obtener solicitudes de tipo APROBACION_COMERCIAL para este usuario y propuesta
+        solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
+        
+        # verBotonSolicitarSubdirectorDaf: Solo cuando estado_preconciliada = True
+        if estado_preconciliada:
+            response["verBotonSolicitarSubdirectorDaf"] = True
+        
+        # noEditarBotonSolicitarSubdirectorDaf: Bloquear el botón si:
+        # 1. Alguna solicitud APROBACION_JP NO está aceptada, O
+        # 2. Existe alguna solicitud APROBACION_COMERCIAL con abierta=False
+        bloquear_boton = False
+        
+        # Condición 1: Verificar solicitudes APROBACION_JP
+        if solicitudes_aprobacion_jp:
+            todas_jp_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_jp)
+            if not todas_jp_aceptadas:
+                bloquear_boton = True
+        
+        # Condición 2: Verificar solicitudes APROBACION_COMERCIAL con abierta=False
+        if solicitudes_aprobacion_comercial:
+            alguna_comercial_cerrada = any(not s["abierta"] for s in solicitudes_aprobacion_comercial)
+            if alguna_comercial_cerrada:
+                bloquear_boton = True
+        
+        response["noEditarBotonSolicitarSubdirectorDaf"] = bloquear_boton
+    
+    # Lógica para DAF Subdirector
+    if "DAF - Subdirector" in roles_usuario:
+        print(f"🔍 DEBUG DAF: Usuario es DAF - Subdirector")
+        print(f"🔍 DEBUG DAF: Estado propuesta: {estado_propuesta_nombre}")
+        print(f"🔍 DEBUG DAF: estado_preconciliada: {estado_preconciliada}")
+        
+        # Obtener solicitudes de tipo APROBACION_COMERCIAL para este usuario y propuesta
+        solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
+        print(f"🔍 DEBUG DAF: Solicitudes APROBACION_COMERCIAL encontradas: {len(solicitudes_aprobacion_comercial)}")
+        print(f"🔍 DEBUG DAF: Solicitudes APROBACION_COMERCIAL: {solicitudes_aprobacion_comercial}")
+        
+        # verBotonConciliar: Solo cuando estado_preconciliada = True
+        if estado_preconciliada:
+            response["verBotonConciliar"] = True
+            print(f"🔍 DEBUG DAF: verBotonConciliar = True")
+        
+        # noEditarBotonConciliar: False si todas las APROBACION_COMERCIAL están ACEPTADAS
+        # True si alguna NO está aceptada
+        if solicitudes_aprobacion_comercial:
+            # Verificar si todas las solicitudes APROBACION_COMERCIAL están aceptadas
+            todas_comerciales_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_comercial)
+            response["noEditarBotonConciliar"] = not todas_comerciales_aceptadas
+            print(f"🔍 DEBUG DAF: todas_comerciales_aceptadas = {todas_comerciales_aceptadas}")
+            print(f"🔍 DEBUG DAF: noEditarBotonConciliar = {not todas_comerciales_aceptadas}")
+        else:
+            # Si no hay solicitudes APROBACION_COMERCIAL, permitir el botón
+            response["noEditarBotonConciliar"] = False
+            print(f"🔍 DEBUG DAF: Sin solicitudes APROBACION_COMERCIAL, noEditarBotonConciliar = False")
         
     return response

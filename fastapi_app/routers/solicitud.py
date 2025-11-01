@@ -268,6 +268,53 @@ def abrir_solicitudes_aprobacion_jp(
 		"idPropuesta": id_propuesta
 	}
 
+@router.patch("/abrir-solicitudes-aprobacion-comercial")
+def abrir_solicitudes_aprobacion_comercial(
+	body: dict = Body(
+		...,
+		example={
+			"idUsuario": 4,
+			"idPropuesta": 1
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Abre todas las solicitudes de tipo APROBACION_COMERCIAL para un usuario y propuesta.
+	Pone abierta=False en todas las solicitudes APROBACION_COMERCIAL del usuario.
+	"""
+	id_usuario = body.get("idUsuario")
+	id_propuesta = body.get("idPropuesta")
+	
+	if not id_usuario or not id_propuesta:
+		return {"error": "Se requieren idUsuario e idPropuesta"}
+	
+	# Buscar todas las solicitudes APROBACION_COMERCIAL del usuario para la propuesta
+	solicitudes = db.query(SolicitudModel).filter(
+		SolicitudModel.idUsuarioGenerador == id_usuario,
+		SolicitudModel.idPropuesta == id_propuesta
+	).all()
+	
+	solicitudes_actualizadas = []
+	for solicitud in solicitudes:
+		if solicitud.tipoSolicitud and solicitud.tipoSolicitud.nombre == "APROBACION_COMERCIAL":
+			# Si el generador y receptor son el mismo, aprobar automáticamente
+			if solicitud.idUsuarioGenerador == solicitud.idUsuarioReceptor:
+				valor_aceptado = db.query(ValorSolicitud).filter_by(nombre="ACEPTADO").first()
+				if valor_aceptado:
+					solicitud.valorSolicitud_id = valor_aceptado.id
+			solicitud.abierta = False
+			solicitudes_actualizadas.append(solicitud.id)
+	
+	db.commit()
+	
+	return {
+		"msg": f"Se cerraron {len(solicitudes_actualizadas)} solicitudes de tipo APROBACION_COMERCIAL",
+		"solicitudesCerradas": solicitudes_actualizadas,
+		"idUsuario": id_usuario,
+		"idPropuesta": id_propuesta
+	}
+
 @router.patch("/solicitudesSubdirectores")
 def editar_solicitud_subdirectores(
 	body: dict = Body(
