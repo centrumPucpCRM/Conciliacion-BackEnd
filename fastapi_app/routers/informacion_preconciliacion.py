@@ -278,24 +278,44 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             Programa.idPropuesta == id_propuesta
         ).all()
     elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
-        # Usuario con rol de Subdirector y/o Jefe de Producto: concatenar ambos
+        # Usuario con rol de Subdirector y/o Jefe de Producto
         from sqlalchemy import or_
         
-        condiciones = []
-        
-        # Si es Subdirector Comercial, agregar programas donde es subdirector
-        if "Comercial - Subdirector" in roles_usuario:
-            condiciones.append(Programa.idSubdirector == id_usuario)
-        
-        # Si es Jefe de Producto, agregar programas donde es jefe de producto
-        if "Comercial - Jefe de producto" in roles_usuario:
-            condiciones.append(Programa.idJefeProducto == id_usuario)
-        
-        # Combinar condiciones con OR para obtener programas de ambos roles
-        programas = db.query(Programa).filter(
-            Programa.idPropuesta == id_propuesta,
-            or_(*condiciones)
-        ).all()
+        # Caso especial: JP + Subdirector Comercial con lógica de "cambio de etapa"
+        if "Comercial - Jefe de producto" in roles_usuario and "Comercial - Subdirector" in roles_usuario:
+            # Obtener el estado de verBotonAprobacionBloqueadoSubComercial para determinar la etapa
+            solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+            esta_en_etapa_subdirector = any(not s["abierta"] for s in solicitudes_aprobacion)
+            
+            if esta_en_etapa_subdirector:
+                # Etapa Subdirector: solo programas donde es subdirector
+                programas = db.query(Programa).filter(
+                    Programa.idSubdirector == id_usuario,
+                    Programa.idPropuesta == id_propuesta
+                ).all()
+            else:
+                # Etapa JP: solo programas donde es jefe de producto
+                programas = db.query(Programa).filter(
+                    Programa.idJefeProducto == id_usuario,
+                    Programa.idPropuesta == id_propuesta
+                ).all()
+        else:
+            # Usuario con un solo rol o sin lógica de cambio de etapa
+            condiciones = []
+            
+            # Si es Subdirector Comercial, agregar programas donde es subdirector
+            if "Comercial - Subdirector" in roles_usuario:
+                condiciones.append(Programa.idSubdirector == id_usuario)
+            
+            # Si es Jefe de Producto, agregar programas donde es jefe de producto
+            if "Comercial - Jefe de producto" in roles_usuario:
+                condiciones.append(Programa.idJefeProducto == id_usuario)
+            
+            # Combinar condiciones con OR para obtener programas de ambos roles
+            programas = db.query(Programa).filter(
+                Programa.idPropuesta == id_propuesta,
+                or_(*condiciones)
+            ).all()
     else:
         # Otros usuarios: sin acceso a programas
         programas = []
@@ -450,24 +470,44 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 Programa.idPropuesta == id_propuesta
             ).all()
         elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
-            # Usuario con rol de Subdirector y/o Jefe de Producto: concatenar ambos
+            # Usuario con rol de Subdirector y/o Jefe de Producto
             from sqlalchemy import or_
             
-            condiciones = []
-            
-            # Si es Subdirector Comercial, agregar programas donde es subdirector
-            if "Comercial - Subdirector" in roles_usuario:
-                condiciones.append(Programa.idSubdirector == id_usuario)
-            
-            # Si es Jefe de Producto, agregar programas donde es jefe de producto
-            if "Comercial - Jefe de producto" in roles_usuario:
-                condiciones.append(Programa.idJefeProducto == id_usuario)
-            
-            # Combinar condiciones con OR para obtener programas de ambos roles
-            programas = db.query(Programa).filter(
-                Programa.idPropuesta == id_propuesta,
-                or_(*condiciones)
-            ).all()
+            # Caso especial: JP + Subdirector Comercial con lógica de "cambio de etapa"
+            if "Comercial - Jefe de producto" in roles_usuario and "Comercial - Subdirector" in roles_usuario:
+                # Obtener el estado de verBotonAprobacionBloqueadoSubComercial para determinar la etapa
+                solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+                esta_en_etapa_subdirector = any(not s["abierta"] for s in solicitudes_aprobacion)
+                
+                if esta_en_etapa_subdirector:
+                    # Etapa Subdirector: solo programas donde es subdirector
+                    programas = db.query(Programa).filter(
+                        Programa.idSubdirector == id_usuario,
+                        Programa.idPropuesta == id_propuesta
+                    ).all()
+                else:
+                    # Etapa JP: solo programas donde es jefe de producto
+                    programas = db.query(Programa).filter(
+                        Programa.idJefeProducto == id_usuario,
+                        Programa.idPropuesta == id_propuesta
+                    ).all()
+            else:
+                # Usuario con un solo rol o sin lógica de cambio de etapa
+                condiciones = []
+                
+                # Si es Subdirector Comercial, agregar programas donde es subdirector
+                if "Comercial - Subdirector" in roles_usuario:
+                    condiciones.append(Programa.idSubdirector == id_usuario)
+                
+                # Si es Jefe de Producto, agregar programas donde es jefe de producto
+                if "Comercial - Jefe de producto" in roles_usuario:
+                    condiciones.append(Programa.idJefeProducto == id_usuario)
+                
+                # Combinar condiciones con OR para obtener programas de ambos roles
+                programas = db.query(Programa).filter(
+                    Programa.idPropuesta == id_propuesta,
+                    or_(*condiciones)
+                ).all()
         else:
             # Otros usuarios: sin acceso a programas
             programas = []
