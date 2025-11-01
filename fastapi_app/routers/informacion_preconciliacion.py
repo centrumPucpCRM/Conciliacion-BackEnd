@@ -269,7 +269,11 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         ).all()
     programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
-    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    oportunidades_all = db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == id_propuesta, 
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
+        Oportunidad.eliminado == False  # Excluir oportunidades eliminadas
+    ).all()
     oportunidades_por_programa = {}
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
@@ -365,7 +369,11 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
     
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
-    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    oportunidades_all = db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == id_propuesta, 
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
+        Oportunidad.eliminado == False  # Excluir oportunidades eliminadas
+    ).all()
     oportunidades_por_programa = {}
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
@@ -545,19 +553,12 @@ def obtener_informacion_preconciliacion(
     
     # Lógica para DAF Subdirector
     if "DAF - Subdirector" in roles_usuario:
-        print(f"🔍 DEBUG DAF: Usuario es DAF - Subdirector")
-        print(f"🔍 DEBUG DAF: Estado propuesta: {estado_propuesta_nombre}")
-        print(f"🔍 DEBUG DAF: estado_preconciliada: {estado_preconciliada}")
-        
         # Obtener solicitudes de tipo APROBACION_COMERCIAL para este usuario y propuesta
         solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
-        print(f"🔍 DEBUG DAF: Solicitudes APROBACION_COMERCIAL encontradas: {len(solicitudes_aprobacion_comercial)}")
-        print(f"🔍 DEBUG DAF: Solicitudes APROBACION_COMERCIAL: {solicitudes_aprobacion_comercial}")
         
         # verBotonConciliar: Solo cuando estado_preconciliada = True
         if estado_preconciliada:
             response["verBotonConciliar"] = True
-            print(f"🔍 DEBUG DAF: verBotonConciliar = True")
         
         # noEditarBotonConciliar: False si todas las APROBACION_COMERCIAL están ACEPTADAS
         # True si alguna NO está aceptada
@@ -565,11 +566,8 @@ def obtener_informacion_preconciliacion(
             # Verificar si todas las solicitudes APROBACION_COMERCIAL están aceptadas
             todas_comerciales_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_comercial)
             response["noEditarBotonConciliar"] = not todas_comerciales_aceptadas
-            print(f"🔍 DEBUG DAF: todas_comerciales_aceptadas = {todas_comerciales_aceptadas}")
-            print(f"🔍 DEBUG DAF: noEditarBotonConciliar = {not todas_comerciales_aceptadas}")
         else:
             # Si no hay solicitudes APROBACION_COMERCIAL, permitir el botón
             response["noEditarBotonConciliar"] = False
-            print(f"🔍 DEBUG DAF: Sin solicitudes APROBACION_COMERCIAL, noEditarBotonConciliar = False")
         
     return response
