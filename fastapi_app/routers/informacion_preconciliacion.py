@@ -94,16 +94,23 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
     if usuario and usuario.roles:
         roles_usuario = {rol.nombre for rol in usuario.roles}
     
+    # Obtener IDs de DAF Supervisor y DAF Subdirector al inicio para optimizar
+    supervisor_daf = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre == "DAF - Supervisor"
+    ).first()
+    id_supervisor_daf = supervisor_daf.id if supervisor_daf else None
+    
+    subdirector_daf = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre == "DAF - Subdirector"
+    ).first()
+    id_subdirector_daf = subdirector_daf.id if subdirector_daf else None
+    
     # Preparar lista de IDs de usuarios para la consulta de solicitudes
     ids_usuarios_consulta = [id_usuario]
     
     # Si el usuario es DAF Subdirector, agregar también el ID de DAF Supervisor
-    if "DAF - Subdirector" in roles_usuario:
-        supervisor_daf = db.query(Usuario).join(Usuario.roles).filter(
-            Rol.nombre == "DAF - Supervisor"
-        ).first()
-        if supervisor_daf:
-            ids_usuarios_consulta.append(supervisor_daf.id)
+    if "DAF - Subdirector" in roles_usuario and id_supervisor_daf:
+        ids_usuarios_consulta.append(id_supervisor_daf)
     
     # Verificar si tiene rol de Jefe de Producto
     es_jefe_producto = "Comercial - Jefe de producto" in roles_usuario
@@ -188,12 +195,26 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             oportunidad=oportunidad,
             programa=programa
         ).model_dump()
+        
         tipo = solicitud_dict["tipoSolicitud"]
+        
+        # Solo aplicar cambio de IDs para solicitudes de oportunidad y programa (NO generales)
+        if tipo in tipos_oportunidad or tipo in tipo_programa:
+            # Si el usuario actual es DAF Subdirector, cambiar los IDs del supervisor por el subdirector
+            if "DAF - Subdirector" in roles_usuario and id_supervisor_daf and id_subdirector_daf:
+                # Cambiar ID del supervisor por el del subdirector en ambos campos
+                if solicitud_dict["idUsuarioReceptor"] == id_supervisor_daf:
+                    solicitud_dict["idUsuarioReceptor"] = id_subdirector_daf
+                if solicitud_dict["idUsuarioGenerador"] == id_supervisor_daf:
+                    solicitud_dict["idUsuarioGenerador"] = id_subdirector_daf
+        
+        # Clasificar solicitudes
         if tipo in tipos_oportunidad:
             solicitudesPropuestaOportunidad.append(solicitud_dict)
         elif tipo in tipo_programa:
             solicitudesPropuestaPrograma.append(solicitud_dict)
         else:
+            # Las solicitudes generales NO se modifican, mantienen los IDs originales
             solicitudesGenerales.append(solicitud_dict)
     
     # Si el usuario tiene rol de Jefe de Producto, siempre devuelve solicitudes de oportunidad/programa
