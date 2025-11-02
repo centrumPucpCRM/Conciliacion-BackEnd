@@ -609,9 +609,8 @@ def obtener_informacion_preconciliacion(
     # === BOTONES JEFE DE PRODUCTO ===
     if "Comercial - Jefe de producto" in roles_usuario:
         response["verBotonAprobacionSubComercial"] = True
-        
-        solicitudes_jp = response.get("solicitudesPropuestaOportunidad", []) + response.get("solicitudesPropuestaPrograma", [])
-        if not solicitudes_jp or all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
+        solicitudes_jp = response.get("solicitudes",[]).get("solicitudesPropuestaOportunidad", []) + response.get("solicitudes",[]).get("solicitudesPropuestaPrograma", [])
+        if all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
             response["verBotonAprobacionFinalizar"] = True
         
         solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
