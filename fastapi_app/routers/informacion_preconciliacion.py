@@ -614,7 +614,9 @@ def obtener_informacion_preconciliacion(
             response["verBotonAprobacionFinalizar"] = True
         
         solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
-        if solicitudes_aprobacion and all(not s["abierta"] for s in solicitudes_aprobacion):
+        # Para JP: solo considerar solicitudes donde él es el GENERADOR (las que envió)
+        solicitudes_jp_generadas = [s for s in solicitudes_aprobacion if s["idUsuarioGenerador"] == id_usuario]
+        if solicitudes_jp_generadas and all(not s["abierta"] for s in solicitudes_jp_generadas):
             response["verBotonAprobacionBloqueadoSubComercial"] = True
     
     # === BOTONES SUBDIRECTOR COMERCIAL ===
