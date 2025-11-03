@@ -20,6 +20,7 @@ from ..models.propuesta import Propuesta, TipoDePropuesta, EstadoPropuesta
 from ..models.tipo_cambio import TipoCambio
 from ..models.solicitud import Solicitud, TipoSolicitud, ValorSolicitud
 from ..models.rol_permiso import Rol
+from .solicitudes_editar import crear_log_estandarizado
 
 
 def cargar_carteras(db, df):
@@ -517,7 +518,6 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     print(f"[INFO] Encontrados {programas_validos} programas con meses válidos para crear solicitudes de subdirectores.")
     
     solicitudes_bulk = []
-    logs_bulk = []
     
     # Obtener el receptor (DAF Subdirector)
     receptor_usuario = db.query(Usuario).filter(Usuario.nombre == 'daf.subdirector').first()
@@ -540,28 +540,25 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
             abierta=True
         )
         solicitudes_bulk.append(nueva_solicitud)
+    
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
         db.flush()
-        # Refrescar solicitudes_bulk con los ids asignados
-        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
-        for s in solicitudes_db:
-            log_data = {
-                'idSolicitud': s.id,
-                'tipoSolicitud_id': s.tipoSolicitud_id,
-                'creadoEn': datetime.datetime.now(),
-                'auditoria': {
-                    'idUsuarioReceptor': s.idUsuarioReceptor,
-                    'idUsuarioGenerador': s.idUsuarioGenerador,
-                    'idPropuesta': s.idPropuesta,
-                    'comentario': s.comentario,
-                    'abierta': s.abierta,
-                    'valorSolicitud_id': s.valorSolicitud_id
-                }
+        
+        # Crear logs estandarizados para cada solicitud creada
+        solicitudes_db = db.query(Solicitud).filter(
+            Solicitud.idPropuesta == propuesta_unica.id, 
+            Solicitud.tipoSolicitud_id == tipo_aprobacion.id
+        ).all()
+        
+        for solicitud in solicitudes_db:
+            # Datos específicos para solicitudes de subdirectores
+            datos_especificos = {
+                'tipoFlujo': 'Aprobacion Comercial',
+                'accionRealizada': 'Solicitud de aprobación comercial creada automáticamente'
             }
-            log = Log(**log_data)
-            logs_bulk.append(log)
-        db.bulk_save_objects(logs_bulk)
+            crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
+        
         db.flush()
 
 
@@ -610,7 +607,6 @@ def crear_solicitudes_Jp(db, propuesta_unica):
     usuarios_dict = {u.id: u for u in usuarios}
     
     solicitudes_bulk = []
-    logs_bulk = []
     
     # Crear UNA solicitud por cada combinación única JP → Subdirector
     for jp_id, subdirector_id in combinaciones_unicas:
@@ -634,28 +630,25 @@ def crear_solicitudes_Jp(db, propuesta_unica):
             abierta=True
         )
         solicitudes_bulk.append(nueva_solicitud)
+    
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
         db.flush()
-        # Refrescar solicitudes_bulk con los ids asignados
-        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
-        for s in solicitudes_db:
-            log_data = {
-                'idSolicitud': s.id,
-                'tipoSolicitud_id': s.tipoSolicitud_id,
-                'creadoEn': datetime.datetime.now(),
-                'auditoria': {
-                    'idUsuarioReceptor': s.idUsuarioReceptor,
-                    'idUsuarioGenerador': s.idUsuarioGenerador,
-                    'idPropuesta': s.idPropuesta,
-                    'comentario': s.comentario,
-                    'abierta': s.abierta,
-                    'valorSolicitud_id': s.valorSolicitud_id
-                }
+        
+        # Crear logs estandarizados para cada solicitud creada
+        solicitudes_db = db.query(Solicitud).filter(
+            Solicitud.idPropuesta == propuesta_unica.id, 
+            Solicitud.tipoSolicitud_id == tipo_aprobacion.id
+        ).all()
+        
+        for solicitud in solicitudes_db:
+            # Datos específicos para solicitudes JP
+            datos_especificos = {
+                'tipoFlujo': 'Aprobacion JP',
+                'accionRealizada': 'Solicitud de aprobación JP creada automáticamente'
             }
-            log = Log(**log_data)
-            logs_bulk.append(log)
-        db.bulk_save_objects(logs_bulk)
+            crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
+        
         db.flush()
 
 

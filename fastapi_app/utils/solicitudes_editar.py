@@ -646,6 +646,78 @@ def generar_mensaje_amigable_log(log):
 				]
 			})
 	
+	elif tipo_solicitud == "APROBACION_COMERCIAL":
+		if valor_solicitud == "PENDIENTE":
+			resultado.update({
+				'icono': '📋',
+				'color': 'blue',
+				'titulo': f'{usuario_generador} SOLICITÓ aprobación comercial',
+				'descripcion': 'Se creó una solicitud de aprobación comercial',
+				'detalles': [
+					f'Solicitado por: {usuario_generador}',
+					f'Dirigido a: {usuario_receptor}',
+					'Estado: Pendiente de aprobación'
+				]
+			})
+		elif valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} APROBÓ comercialmente',
+				'descripcion': 'Se aprobó la solicitud comercial',
+				'detalles': [
+					f'Aprobado por: {usuario_generador}',
+					'Estado: Aprobación comercial otorgada'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '❌',
+				'color': 'red',
+				'titulo': f'{usuario_generador} RECHAZÓ aprobación comercial',
+				'descripcion': 'Se rechazó la solicitud comercial',
+				'detalles': [
+					f'Rechazado por: {usuario_generador}',
+					'Estado: Aprobación comercial denegada'
+				]
+			})
+	
+	elif tipo_solicitud == "APROBACION_JP":
+		if valor_solicitud == "PENDIENTE":
+			resultado.update({
+				'icono': '📋',
+				'color': 'blue',
+				'titulo': f'{usuario_generador} SOLICITÓ aprobación JP',
+				'descripcion': 'Se creó una solicitud de aprobación de Jefe de Producto',
+				'detalles': [
+					f'Solicitado por: {usuario_generador}',
+					f'Dirigido a: {usuario_receptor}',
+					'Estado: Pendiente de aprobación'
+				]
+			})
+		elif valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} APROBÓ como JP',
+				'descripcion': 'Se aprobó la solicitud de Jefe de Producto',
+				'detalles': [
+					f'Aprobado por: {usuario_generador}',
+					'Estado: Aprobación JP otorgada'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '❌',
+				'color': 'red',
+				'titulo': f'{usuario_generador} RECHAZÓ aprobación JP',
+				'descripcion': 'Se rechazó la solicitud de Jefe de Producto',
+				'detalles': [
+					f'Rechazado por: {usuario_generador}',
+					'Estado: Aprobación JP denegada'
+				]
+			})
+	
 	# Casos para otros tipos de solicitud
 	else:
 		resultado.update({
@@ -656,7 +728,7 @@ def generar_mensaje_amigable_log(log):
 			'detalles': [
 				f'Tipo: {tipo_solicitud}',
 				f'Estado: {valor_solicitud}',
-				f'Usuario: {usuario_receptor}'
+				f'Usuario: {usuario_generador if valor_solicitud == "ACEPTADO" else usuario_receptor}'
 			]
 		})
 	
