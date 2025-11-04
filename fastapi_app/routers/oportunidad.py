@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 
@@ -9,6 +9,7 @@ from ..models.solicitud import Solicitud as SolicitudModel, ValorSolicitud
 from ..models.solicitud_x_oportunidad import SolicitudXOportunidad
 from ..models.programa import Programa
 from ..schemas.solicitud import SolicitudOportunidad
+from ..services.crm_service import obtener_oportunidades_desde_leads
 
 router = APIRouter(prefix="/oportunidad", tags=["Oportunidad"])
 
@@ -188,6 +189,46 @@ def listar_oportunidades_disponibles(
         "size": size,
         "pages": pages,
     }
+
+
+@router.get("/listar/disponibles-crm")
+def listar_oportunidades_disponibles_crm(
+    programa_id: int = Query(..., alias="programa_id", description="ID del programa"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista oportunidades disponibles desde CRM filtradas por programa.
+    Obtiene el código CRM del programa y consulta la API de Oracle Cloud CRM
+    para obtener oportunidades relacionadas a leads convertidos.
+    """
+    # Buscar el programa por ID
+    programa = db.query(Programa).filter(Programa.id == programa_id).first()
+    
+    if not programa:
+        raise HTTPException(status_code=404, detail="Programa no encontrado")
+    
+    # Verificar que el programa tenga código CRM
+    if not programa.codigo:
+        raise HTTPException(
+            status_code=400, 
+            detail="El programa no tiene código CRM asociado"
+        )
+    
+    try:
+        # Obtener oportunidades desde CRM usando el código
+        resultados = obtener_oportunidades_desde_leads(str(programa.codigo))
+        
+        return {
+            "items": resultados,
+            "total": len(resultados),
+            "programa_id": programa_id,
+            "codigo_crm": programa.codigo
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener oportunidades desde CRM: {str(e)}"
+        )
 
 
 @router.get("/solicitudes")
