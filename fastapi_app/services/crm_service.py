@@ -359,26 +359,28 @@ def sincronizar_oportunidades_crm(db: Session, codigo_crm: str) -> Dict[str, Any
                 "errores": 0
             }
         
-        # Obtener party numbers existentes en BD para este programa
+        # Obtener party numbers existentes en BD para este programa y convertir a strings
         party_numbers_existentes_query = (
             db.query(Oportunidad.partyNumber)
             .filter(Oportunidad.idPrograma == programa.id)
             .filter(Oportunidad.partyNumber.isnot(None))
             .all()
         )
-        party_numbers_existentes = {pn[0] for pn in party_numbers_existentes_query}
+        party_numbers_existentes = {str(pn[0]) for pn in party_numbers_existentes_query}
+        
+        # Obtener party numbers del CRM como strings
+        party_numbers_crm = {str(op.get("PartyNumber")) for op in oportunidades_crm if op.get("PartyNumber")}
         
         # Debug: imprimir información de comparación
-        party_numbers_crm = {op.get("PartyNumber") for op in oportunidades_crm if op.get("PartyNumber")}
         print(f"DEBUG - Programa ID: {programa.id}")
-        print(f"DEBUG - Party numbers en BD: {party_numbers_existentes}")
-        print(f"DEBUG - Party numbers en CRM: {party_numbers_crm}")
+        print(f"DEBUG - Party numbers en BD (str): {party_numbers_existentes}")
+        print(f"DEBUG - Party numbers en CRM (str): {party_numbers_crm}")
         print(f"DEBUG - Intersección: {party_numbers_existentes.intersection(party_numbers_crm)}")
         
-        # Filtrar oportunidades nuevas
+        # Filtrar oportunidades nuevas comparando strings
         oportunidades_nuevas = [
             op for op in oportunidades_crm 
-            if op.get("PartyNumber") not in party_numbers_existentes
+            if str(op.get("PartyNumber")) not in party_numbers_existentes
         ]
         
         print(f"DEBUG - Total CRM: {len(oportunidades_crm)}, Nuevas: {len(oportunidades_nuevas)}, Ya existentes: {len(oportunidades_crm) - len(oportunidades_nuevas)}")
