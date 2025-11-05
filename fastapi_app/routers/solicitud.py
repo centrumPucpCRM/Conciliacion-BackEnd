@@ -21,6 +21,7 @@ from ..models.log import Log
 from ..models.programa import Programa
 from ..models.usuario import Usuario
 
+
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
 # Endpoint generico para crear solicitudes de alumno o programa
 @router.get("/listar", response_model=List[Solicitud])

@@ -9,7 +9,7 @@ from ..models.solicitud import Solicitud as SolicitudModel, ValorSolicitud
 from ..models.solicitud_x_oportunidad import SolicitudXOportunidad
 from ..models.programa import Programa
 from ..schemas.solicitud import SolicitudOportunidad
-from ..services.crm_service import obtener_oportunidades_desde_leads
+from ..services.crm_service import obtener_oportunidades_desde_leads, sincronizar_oportunidades_crm
 
 router = APIRouter(prefix="/oportunidad", tags=["Oportunidad"])
 
@@ -197,9 +197,10 @@ def listar_oportunidades_disponibles_crm(
     db: Session = Depends(get_db),
 ):
     """
-    Lista oportunidades disponibles desde CRM filtradas por programa.
-    Obtiene el código CRM del programa y consulta la API de Oracle Cloud CRM
-    para obtener oportunidades relacionadas a leads convertidos.
+    Lista oportunidades disponibles desde CRM filtradas por programa y las sincroniza automáticamente.
+    Obtiene el código CRM del programa, consulta la API de Oracle Cloud CRM para obtener 
+    oportunidades relacionadas a leads convertidos, y automáticamente inserta las nuevas 
+    oportunidades en la BD comparando por partyNumber para evitar duplicados.
     """
     # Buscar el programa por ID
     programa = db.query(Programa).filter(Programa.id == programa_id).first()
@@ -216,14 +217,41 @@ def listar_oportunidades_disponibles_crm(
     
     try:
         # Obtener oportunidades desde CRM usando el código
-        resultados = obtener_oportunidades_desde_leads(str(programa.codigo))
+        resultados_crm = obtener_oportunidades_desde_leads(str(programa.codigo))
         
-        return {
-            "items": resultados,
-            "total": len(resultados),
+        # Preparar respuesta base
+        respuesta = {
+            "items": resultados_crm,
+            "total": len(resultados_crm),
             "programa_id": programa_id,
-            "codigo_crm": programa.codigo
+            "codigo_crm": programa.codigo,
+            "sincronizado": False,
+            "estadisticas_sincronizacion": None
         }
+        
+        # Ejecutar sincronización automáticamente
+        try:
+            estadisticas = sincronizar_oportunidades_crm(db, str(programa.codigo))
+            respuesta.update({
+                "sincronizado": True,
+                "estadisticas_sincronizacion": estadisticas,
+                "mensaje_sincronizacion": f"Sincronización completada: {estadisticas['nuevas_insertadas']} nuevas oportunidades insertadas de {estadisticas['total_crm']} encontradas en CRM"
+            })
+        except Exception as sync_error:
+            # Si falla la sincronización, aún retornar los datos del CRM
+            respuesta.update({
+                "sincronizado": False,
+                "error_sincronizacion": str(sync_error),
+                "estadisticas_sincronizacion": {
+                    "total_crm": len(resultados_crm),
+                    "nuevas_insertadas": 0,
+                    "ya_existentes": 0,
+                    "errores": 1
+                }
+            })
+        
+        return respuesta
+        
     except Exception as e:
         raise HTTPException(
             status_code=500,

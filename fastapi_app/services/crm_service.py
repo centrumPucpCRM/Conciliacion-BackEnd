@@ -6,6 +6,11 @@ import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional
 import threading
+from datetime import datetime, date
+from sqlalchemy.orm import Session
+from ..models.oportunidad import Oportunidad
+from ..models.programa import Programa
+from ..models.tipo_cambio import TipoCambio
 
 
 # =========================
@@ -181,6 +186,7 @@ def procesar_party(codigo_crm: str, party: int) -> List[Dict[str, Any]]:
                 **cliente,
                 **op,
                 "OwnerPartyName": owner_name,
+                "PartyNumber":party,
             })
         
         return resultados
@@ -231,4 +237,192 @@ def obtener_oportunidades_desde_leads(codigo_crm: str) -> List[Dict[str, Any]]:
         return resultados
     except Exception as e:
         raise Exception(f"Error al obtener oportunidades desde CRM: {str(e)}")
+
+
+# =========================
+# Transformación y sincronización con BD
+# =========================
+def _transformar_oportunidad_crm(data_crm: Dict[str, Any], id_programa: int, id_propuesta: int, id_tipo_cambio: int) -> Dict[str, Any]:
+    """Transforma los datos del CRM al formato requerido por el modelo Oportunidad."""
+    
+    # Calcular descuento
+    descuento = data_crm.get("CTRPorctDescVentas_c", 0.0)
+    if descuento is None:
+        descuento = 0.0
+    
+    # Calcular monto
+    monto = data_crm.get("Revenue", 0.0)
+    if monto is None:
+        monto = 0.0
+    
+    # Calcular becado (descuento > 99% o monto < 10)
+    becado = descuento > 0.99 or monto < 10
+    
+    # Calcular fecha de matrícula (la mayor de las tres fechas)
+    fechas = []
+    
+    # CTRFMatricula_c
+    if data_crm.get("CTRFMatricula_c"):
+        try:
+            fecha_matricula = datetime.strptime(data_crm["CTRFMatricula_c"], "%Y-%m-%d").date()
+            fechas.append(fecha_matricula)
+        except:
+            pass
+    
+    # CTRInstanteCerradaGamada_c
+    if data_crm.get("CTRInstanteCerradaGamada_c"):
+        try:
+            fecha_cerrada = datetime.fromisoformat(data_crm["CTRInstanteCerradaGamada_c"].replace('Z', '+00:00')).date()
+            fechas.append(fecha_cerrada)
+        except:
+            pass
+    
+    # CreationDate
+    if data_crm.get("CreationDate"):
+        try:
+            fecha_creacion = datetime.fromisoformat(data_crm["CreationDate"].replace('Z', '+00:00')).date()
+            fechas.append(fecha_creacion)
+        except:
+            pass
+    
+    fecha_matricula = max(fechas) if fechas else None
+    
+    # Calcular posible atípico (Revenue/CTRPrecioLista_c)
+    posible_atipico = True  # Por ahora siempre True como solicitado
+    precio_lista = data_crm.get("CTRPrecioLista_c")
+    if precio_lista and precio_lista > 0 and monto:
+        ratio = monto / precio_lista
+        # Se puede ajustar esta lógica después
+        posible_atipico = isinstance(ratio, float)
+    
+    return {
+        "nombre": data_crm.get("ContactName", ""),
+        "documentoIdentidad": data_crm.get("PersonDEO_CTRNrodedocumento_c", ""),
+        "correo": data_crm.get("EmailAddress", ""),
+        "telefono": data_crm.get("OverallPrimaryFormattedPhoneNumber", ""),
+        "etapaDeVentas": "Agregado CRM",
+        "descuento": descuento,
+        "monto": monto,
+        "becado": becado,
+        "partyNumber": data_crm.get("PartyNumber"),
+        "conciliado": data_crm.get("CTRVentaConciliada_c", False),
+        "posibleAtipico": posible_atipico,
+        "moneda": data_crm.get("CTRMoneda_c", ""),
+        "fechaMatricula": fecha_matricula,
+        "idPropuesta": id_propuesta,
+        "idPrograma": id_programa,
+        "idTipoCambio": id_tipo_cambio,
+        "montoPropuesto": monto,  # Mismo monto por ahora
+        "descuentoPropuesto": descuento,  # Mismo descuento por ahora
+        "etapaVentaPropuesta": "Agregado CRM",
+        "fechaMatriculaPropuesta": fecha_matricula,
+        "eliminado": False,
+        "vendedora": data_crm.get("OwnerPartyName", "")
+    }
+
+
+def _obtener_tipo_cambio_por_moneda_fecha(db: Session, moneda: str, fecha: date) -> Optional[int]:
+    """Obtiene el ID del tipo de cambio más reciente para una moneda y fecha."""
+    tipo_cambio = db.query(TipoCambio).filter(
+        TipoCambio.moneda_origen == moneda,
+        TipoCambio.fecha_tipo_cambio <= fecha
+    ).order_by(TipoCambio.fecha_tipo_cambio.desc()).first()
+    
+    return tipo_cambio.id if tipo_cambio else None
+
+
+def sincronizar_oportunidades_crm(db: Session, codigo_crm: str) -> Dict[str, Any]:
+    """
+    Sincroniza las oportunidades del CRM con la base de datos.
+    
+    Args:
+        db: Sesión de base de datos
+        codigo_crm: Código CRM del programa
+        
+    Returns:
+        Diccionario con estadísticas de la sincronización
+    """
+    try:
+        # Obtener el programa por código CRM
+        programa = db.query(Programa).filter(Programa.codigo == codigo_crm).first()
+        if not programa:
+            raise Exception(f"No se encontró programa con código CRM: {codigo_crm}")
+        
+        # Obtener oportunidades del CRM
+        oportunidades_crm = obtener_oportunidades_desde_leads(codigo_crm)
+        
+        if not oportunidades_crm:
+            return {
+                "total_crm": 0,
+                "nuevas_insertadas": 0,
+                "ya_existentes": 0,
+                "errores": 0
+            }
+        
+        # Obtener party numbers existentes en BD para este programa
+        party_numbers_existentes_query = (
+            db.query(Oportunidad.partyNumber)
+            .filter(Oportunidad.idPrograma == programa.id)
+            .filter(Oportunidad.partyNumber.isnot(None))
+            .all()
+        )
+        party_numbers_existentes = {pn[0] for pn in party_numbers_existentes_query}
+        
+        # Debug: imprimir información de comparación
+        party_numbers_crm = {op.get("PartyNumber") for op in oportunidades_crm if op.get("PartyNumber")}
+        print(f"DEBUG - Programa ID: {programa.id}")
+        print(f"DEBUG - Party numbers en BD: {party_numbers_existentes}")
+        print(f"DEBUG - Party numbers en CRM: {party_numbers_crm}")
+        print(f"DEBUG - Intersección: {party_numbers_existentes.intersection(party_numbers_crm)}")
+        
+        # Filtrar oportunidades nuevas
+        oportunidades_nuevas = [
+            op for op in oportunidades_crm 
+            if op.get("PartyNumber") not in party_numbers_existentes
+        ]
+        
+        print(f"DEBUG - Total CRM: {len(oportunidades_crm)}, Nuevas: {len(oportunidades_nuevas)}, Ya existentes: {len(oportunidades_crm) - len(oportunidades_nuevas)}")
+        
+        estadisticas = {
+            "total_crm": len(oportunidades_crm),
+            "nuevas_insertadas": 0,
+            "ya_existentes": len(oportunidades_crm) - len(oportunidades_nuevas),
+            "errores": 0
+        }
+        
+        # Insertar oportunidades nuevas
+        for op_crm in oportunidades_nuevas:
+            try:
+                # Obtener tipo de cambio
+                moneda = op_crm.get("CTRMoneda_c", "USD")
+                fecha_consulta = date.today()
+                id_tipo_cambio = _obtener_tipo_cambio_por_moneda_fecha(db, moneda, fecha_consulta)
+                
+                # Transformar datos
+                datos_oportunidad = _transformar_oportunidad_crm(
+                    op_crm, 
+                    programa.id, 
+                    programa.idPropuesta,
+                    id_tipo_cambio
+                )
+                
+                # Crear nueva oportunidad
+                nueva_oportunidad = Oportunidad(**datos_oportunidad)
+                db.add(nueva_oportunidad)
+                
+                estadisticas["nuevas_insertadas"] += 1
+                
+            except Exception as e:
+                print(f"Error insertando oportunidad con PartyNumber {op_crm.get('PartyNumber')}: {str(e)}")
+                estadisticas["errores"] += 1
+                continue
+        
+        # Confirmar cambios
+        db.commit()
+        
+        return estadisticas
+        
+    except Exception as e:
+        db.rollback()
+        raise Exception(f"Error en sincronización CRM: {str(e)}")
 
