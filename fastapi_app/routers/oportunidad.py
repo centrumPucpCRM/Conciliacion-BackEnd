@@ -137,7 +137,7 @@ def listar_oportunidades_disponibles(
     Lista oportunidades filtradas por propuesta y programa con paginación, incluyendo solo las etapas de etapas_excluir.
     Incluye campo 'editar' que indica si la oportunidad NO tiene solicitudes asociadas (true = puede editar).
     """
-    etapas_incluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
+    etapas_incluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     query = (
         db.query(Oportunidad)
         .filter(Oportunidad.idPropuesta == propuesta_id)
