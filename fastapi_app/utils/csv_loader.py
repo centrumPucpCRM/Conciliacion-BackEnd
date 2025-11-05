@@ -250,6 +250,29 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             moneda = 'PEN'
         
         subdireccion = sanitize_value(row.get('programa.subdireccion'))
+        # enRiesgo: Invertir la lógica de aprobadoPorDaf
+        # si aprobadoPorDaf es True/1/"true" -> enRiesgo = False
+        # si aprobadoPorDaf es False/0/"false"/None -> enRiesgo = True
+        aprobado_por_daf = sanitize_value(row.get("programa.aprobadoPorDaf"))
+        if aprobado_por_daf is None:
+            enRiesgo = True
+        elif isinstance(aprobado_por_daf, str):
+            # Valores que se consideran "aprobado" (truthy)
+            truthy_values = ['true', '1', 'yes', 'si', 'sí', 'y', 's']
+            # Valores que se consideran "no aprobado" (falsy)
+            falsy_values = ['false', '0', 'no', 'n', 'f']
+            val_lower = aprobado_por_daf.lower()
+            if val_lower in truthy_values:
+                enRiesgo = False
+            elif val_lower in falsy_values:
+                enRiesgo = True
+            else:
+                # Cualquier otro valor se considera como "no aprobado"
+                enRiesgo = True
+        elif isinstance(aprobado_por_daf, (int, float)):
+            enRiesgo = not bool(aprobado_por_daf)
+        else:
+            enRiesgo = not bool(aprobado_por_daf)
         usuario_nombre = sanitize_value(row.get('usuario.nombre', ''))
         usuario_nombreSubdirector = sanitize_value(row.get('usuario.nombreSubdirector', ''))
         
@@ -293,7 +316,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             cartera=cartera_nombre,
             mes=mes,
             mesPropuesto=mes,
-            metaDeAlumnos=meta_alumnos
+            metaDeAlumnos=meta_alumnos,
+            enRiesgo=enRiesgo  # Leído del CSV
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
@@ -430,6 +454,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
         except Exception as e:
             print(f"[ERROR] Bulk insert final: {e}")
             db.rollback()
+
     return oportunidades_dict
 
 def cargar_tipo_cambio(db):

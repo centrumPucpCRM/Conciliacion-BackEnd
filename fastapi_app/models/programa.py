@@ -32,3 +32,4 @@ class Programa(Base):
     mesPropuesto = Column(Integer)
     noAperturar = Column(Boolean,default=False)
     noCalcular = Column(Boolean,default=False)
+    enRiesgo = Column(Boolean,default=False)
