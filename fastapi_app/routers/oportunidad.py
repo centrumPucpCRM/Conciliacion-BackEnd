@@ -232,25 +232,18 @@ def listar_oportunidades_disponibles_crm(
         # Ejecutar sincronización automáticamente
         try:
             estadisticas = sincronizar_oportunidades_crm(db, str(programa.codigo))
-            respuesta.update({
-                "sincronizado": True,
-                "estadisticas_sincronizacion": estadisticas,
-                "mensaje_sincronizacion": f"Sincronización completada: {estadisticas['nuevas_insertadas']} nuevas oportunidades insertadas de {estadisticas['total_crm']} encontradas en CRM"
-            })
+            
+            # Respuesta simplificada
+            if estadisticas['nuevas_insertadas'] == 0:
+                return {"message": "No hay alumnos nuevos en CRM"}
+            else:
+                return {"message": f"Se insertaron {estadisticas['nuevas_insertadas']} alumnos"}
+                
         except Exception as sync_error:
-            # Si falla la sincronización, aún retornar los datos del CRM
-            respuesta.update({
-                "sincronizado": False,
-                "error_sincronizacion": str(sync_error),
-                "estadisticas_sincronizacion": {
-                    "total_crm": len(resultados_crm),
-                    "nuevas_insertadas": 0,
-                    "ya_existentes": 0,
-                    "errores": 1
-                }
-            })
-        
-        return respuesta
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error en sincronización: {str(sync_error)}"
+            )
         
     except Exception as e:
         raise HTTPException(
