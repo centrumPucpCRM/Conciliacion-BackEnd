@@ -320,7 +320,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         # Otros usuarios: sin acceso a programas
         programas = []
     programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
-    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
+    etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     oportunidades_all = db.query(Oportunidad).filter(
         Oportunidad.idPropuesta == id_propuesta, 
         Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
@@ -426,7 +426,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     ).all()
     ids_acceso_total = {u.id for u in usuarios_acceso_total}
     
-    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
+    etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     oportunidades_all = db.query(Oportunidad).filter(
         Oportunidad.idPropuesta == id_propuesta, 
         Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
