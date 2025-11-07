@@ -642,7 +642,7 @@ def crear_solicitudes_Jp(db, propuesta_unica):
             print(f"[WARNING] Usuario no encontrado (JP: {jp_id}, Subdirector: {subdirector_id}). Saltando solicitud.")
             continue
         
-        comentario = f"Solicitud de {jp_usuario.nombre} para revisión de {subdirector_usuario.nombre}"
+        comentario = f" El JP {jp_usuario.nombre} esta revisando la solicitud"
         
         nueva_solicitud = Solicitud(
             idUsuarioGenerador=jp_usuario.id,

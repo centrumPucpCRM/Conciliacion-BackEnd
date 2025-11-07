@@ -68,6 +68,7 @@ def listar_oportunidades(
     """
     Lista oportunidades filtradas por propuesta y programa con paginación.
     Incluye campo 'editar' que indica si la oportunidad NO tiene solicitudes asociadas (true = puede editar).
+    Ordena por posibles atípicos primero, becados segundo, no editables tercero.
     """
     etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     query = (
@@ -92,6 +93,21 @@ def listar_oportunidades(
         programa_id=programa_id,
         db=db
     )
+
+    # Crear items con campo editar y ordenar
+    items_temp = []
+    for r in rows:
+        editar = r.id not in oportunidades_con_solicitudes
+        items_temp.append({
+            "row": r,
+            "editar": editar
+        })
+    
+    # Ordenar por: 1) Posibles atípicos primero, 2) Becados segundo, 3) No editables tercero (editar=False)
+    items_temp.sort(key=lambda x: (not x["row"].posibleAtipico, not x["row"].becado, x["editar"]))
+    
+    # Extraer las filas ordenadas
+    rows = [item["row"] for item in items_temp]
 
     items = [
         {
@@ -136,6 +152,7 @@ def listar_oportunidades_disponibles(
     """
     Lista oportunidades filtradas por propuesta y programa con paginación, incluyendo solo las etapas de etapas_excluir.
     Incluye campo 'editar' que indica si la oportunidad NO tiene solicitudes asociadas (true = puede editar).
+    Ordena por posibles atípicos primero, becados segundo, no editables tercero.
     """
     etapas_incluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     query = (
@@ -156,6 +173,21 @@ def listar_oportunidades_disponibles(
         programa_id=programa_id,
         db=db
     )
+
+    # Crear items con campo editar y ordenar
+    items_temp = []
+    for r in rows:
+        editar = r.id not in oportunidades_con_solicitudes
+        items_temp.append({
+            "row": r,
+            "editar": editar
+        })
+    
+    # Ordenar por: 1) Posibles atípicos primero, 2) Becados segundo, 3) No editables tercero (editar=False)
+    items_temp.sort(key=lambda x: (not x["row"].posibleAtipico, not x["row"].becado, x["editar"]))
+    
+    # Extraer las filas ordenadas
+    rows = [item["row"] for item in items_temp]
 
     items = [
         {
