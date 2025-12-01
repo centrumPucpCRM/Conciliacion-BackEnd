@@ -30,3 +30,4 @@ class VacationStatus:
     def __str__(self) -> str:
         return "En vacaciones" if self.value else "Trabajando"
 
+

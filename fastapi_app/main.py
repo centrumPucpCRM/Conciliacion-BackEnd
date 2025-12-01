@@ -11,6 +11,7 @@ from .routers import dashboard
 from .routers import informacion_preconciliacion
 from .routers import rol as rol_router
 from .routers import sub_direccion
+from .routers import google_auth as google_auth_router
 from .bounded_contexts.vendedores.interface import router as vendedores_router
 
 
@@ -47,6 +48,7 @@ app.add_middleware(
 )
 
 app.include_router(usuario_router.router)
+app.include_router(google_auth_router.router)
 app.include_router(cartera.router)
 app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
@@ -66,6 +68,16 @@ app.include_router(vendedores_router.router)
 # app.include_router(propuesta_programas.router, tags=["Propuesta"])
 # app.include_router(solicitudes_pre_conciliacion_router)
 # app.include_router(daf_programa_router)
+
+# Bounded Context de JWT Authentication (Arquitectura Hexagonal + DDD)
+# Este router proporciona endpoints de ejemplo y dependencias para usar en otros routers
+from .bounded_contexts.jwt_auth.interface import router as jwt_auth_router
+app.include_router(jwt_auth_router)
+
+# Router de conciliaciones usando arquitectura hexagonal (ejemplo avanzado)
+# Descomenta para ver cómo usar el bounded context en un router real:
+# from .routers import conciliacion_jwt_hexagonal
+# app.include_router(conciliacion_jwt_hexagonal.router)
 
 # Habilitar fastapi-pagination en la app
 add_pagination(app)
