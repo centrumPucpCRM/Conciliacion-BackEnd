@@ -12,6 +12,7 @@ from .routers import informacion_preconciliacion
 from .routers import rol as rol_router
 from .routers import sub_direccion
 from .routers import google_auth as google_auth_router
+from .routers import usuario_marketing as usuario_marketing_router
 from .bounded_contexts.vendedores.interface import router as vendedores_router
 
 
@@ -49,6 +50,7 @@ app.add_middleware(
 
 app.include_router(usuario_router.router)
 app.include_router(google_auth_router.router)
+app.include_router(usuario_marketing_router.router)
 app.include_router(cartera.router)
 app.include_router(oportunidad.router)
 # app.include_router(tipo_cambio.router)
