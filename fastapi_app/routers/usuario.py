@@ -344,3 +344,178 @@ def obtener_usuarios_pendientes(
         raise HTTPException(status_code=500, detail="Error al obtener usuarios pendientes")
 
 
+@router.get("/listar/completo")
+async def listar_usuarios_completo(
+    page: int = Query(1, ge=1, description="Número de página"),
+    size: int = Query(50, ge=1, le=100, description="Tamaño de página"),
+    proviene: Optional[str] = Query(None, description="Filtrar por origen: 'local' o 'google'"),
+    buscar: Optional[str] = Query(None, description="Buscar por nombre o correo"),
+    db: Session = Depends(get_db)
+):
+    """
+    Lista todos los usuarios del sistema combinando usuarios locales y de Google.
+    
+    Args:
+        page: Número de página (por defecto 1)
+        size: Tamaño de página (por defecto 50, máximo 100)
+        proviene: Filtrar por origen - 'local' o 'google'
+        buscar: Término de búsqueda por nombre o correo
+    
+    Returns:
+        {
+            "items": [
+                {
+                    "idUsuario": 1,
+                    "nombre": "usuario",
+                    "correo": "usuario@pucp.edu.pe",
+                    "documentoIdentidad": null,
+                    "activo": true,
+                    "tipo": "local",
+                    "permisos": ["permiso1", "permiso2"],
+                    "roles": ["Rol 1"],
+                    "proviene": "local"
+                }
+            ],
+            "total": 10,
+            "page": 1,
+            "size": 50,
+            "pages": 1
+        }
+    """
+    try:
+        # ============================================================
+        # 1. OBTENER USUARIOS LOCALES DE LA BASE DE DATOS
+        # ============================================================
+        query = db.query(Usuario).options(
+            selectinload(Usuario.permisos),
+            selectinload(Usuario.roles).selectinload(Rol.permisos)
+        )
+        
+        # Aplicar búsqueda si existe
+        if buscar:
+            search_filter = or_(
+                Usuario.nombre.ilike(f"%{buscar}%"),
+                Usuario.correo.ilike(f"%{buscar}%")
+            )
+            query = query.filter(search_filter)
+        
+        usuarios_locales = query.all()
+        
+        usuarios_lista = []
+        for user in usuarios_locales:
+            # Determinar tipo de usuario
+            es_google = (
+                user.documentoIdentidad and 
+                user.documentoIdentidad.startswith("GOOGLE_") and 
+                user.clave is None
+            )
+            
+            # Get permissions
+            direct_perms = {p.descripcion for p in user.permisos if hasattr(p, "descripcion")}
+            role_perms = set()
+            for rol in user.roles:
+                for p in rol.permisos:
+                    if hasattr(p, "descripcion"):
+                        role_perms.add(p.descripcion)
+            permisos = sorted(list(direct_perms | role_perms))
+            
+            # Get role names
+            roles = sorted([rol.nombre for rol in user.roles if hasattr(rol, "nombre")])
+            
+            usuario_data = {
+                "idUsuario": user.id,
+                "nombre": user.nombre,
+                "correo": user.correo,
+                "documentoIdentidad": user.documentoIdentidad,
+                "activo": user.activo,
+                "tipo": "google" if es_google else "local",
+                "permisos": permisos,
+                "roles": roles,
+                "proviene": "local"  # Todos los usuarios en la BD local provienen de "local"
+            }
+            
+            usuarios_lista.append(usuario_data)
+        
+        # ============================================================
+        # 2. OBTENER USUARIOS DEL SERVICIO DE GOOGLE
+        # ============================================================
+        usuarios_google_externos = []
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                # Llamar al servicio de autenticación de Google
+                response = await client.get(f"{GOOGLE_AUTH_SERVICE_URL}/auth/users/list")
+                
+                if response.status_code == 200:
+                    google_users_data = response.json()
+                    google_users = google_users_data.get("users", [])
+                    
+                    # Obtener correos de usuarios locales para evitar duplicados
+                    correos_locales = {u["correo"].lower() for u in usuarios_lista if u["correo"]}
+                    
+                    for gu in google_users:
+                        email = gu.get("email", "")
+                        
+                        # Solo agregar si no existe en la BD local
+                        if email.lower() not in correos_locales:
+                            # Aplicar búsqueda si existe
+                            if buscar:
+                                nombre = gu.get("name", "")
+                                if buscar.lower() not in email.lower() and buscar.lower() not in nombre.lower():
+                                    continue
+                            
+                            usuarios_google_externos.append({
+                                "idUsuario": None,
+                                "nombre": gu.get("name", email.split("@")[0]),
+                                "correo": email,
+                                "documentoIdentidad": f"GOOGLE_{gu.get('id', '')}",
+                                "activo": False,  # No están en BD local
+                                "tipo": "google",
+                                "permisos": [],
+                                "roles": [],
+                                "proviene": "google"
+                            })
+                
+        except httpx.TimeoutException:
+            logger.warning("Timeout al conectar con el servicio de Google")
+        except httpx.RequestError as e:
+            logger.warning(f"Error al conectar con el servicio de Google: {e}")
+        except Exception as e:
+            logger.error(f"Error inesperado al obtener usuarios de Google: {e}")
+        
+        # ============================================================
+        # 3. COMBINAR Y FILTRAR POR ORIGEN
+        # ============================================================
+        todos_usuarios = usuarios_lista + usuarios_google_externos
+        
+        # Filtrar por origen si se especifica
+        if proviene:
+            proviene_lower = proviene.lower()
+            if proviene_lower in ["local", "google"]:
+                todos_usuarios = [u for u in todos_usuarios if u["proviene"] == proviene_lower]
+        
+        # ============================================================
+        # 4. APLICAR PAGINACIÓN
+        # ============================================================
+        total = len(todos_usuarios)
+        total_pages = (total + size - 1) // size if total > 0 else 1
+        
+        # Calcular offset
+        offset = (page - 1) * size
+        usuarios_paginados = todos_usuarios[offset:offset + size]
+        
+        return {
+            "items": usuarios_paginados,
+            "total": total,
+            "page": page,
+            "size": size,
+            "pages": total_pages
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al listar usuarios completo: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener la lista completa de usuarios")
+
+
+
