@@ -151,7 +151,7 @@ def editar_solicitud_generica(
 		return aceptar_rechazar_edicion_alumno(body, db,solicitud)
 	elif tipo_solicitud == "EXCLUSION_PROGRAMA":  #OK
 		return aceptar_rechazar_solicitud_basico(body, db,solicitud)
-	elif tipo_solicitud == "FECHA_CAMBIADA":
+	elif tipo_solicitud == "FECHA_CAMBIADA": #Ok
 		print("ENTRE")
 		return aceptar_rechazar_fecha_cambiada(body, db,solicitud)
 	elif tipo_solicitud == "ELIMINACION_POSIBLE_BECADO": #OK

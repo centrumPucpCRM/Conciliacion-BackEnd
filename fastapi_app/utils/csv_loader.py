@@ -437,7 +437,7 @@ def cargar_tipo_cambio(db):
             TipoCambio.fecha_tipo_cambio == today
         ).first()
         if not tipo_cambio:
-            equivalencias = {'PEN': 1.0, 'USD': 3.75, 'EUR': 4.10}
+            equivalencias = {'PEN': 1.0, 'USD': 3.5, 'EUR': 4.10}
             tipo_cambio = TipoCambio(
                 moneda_origen=moneda,
                 moneda_target='PEN',

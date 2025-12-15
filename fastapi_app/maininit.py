@@ -44,7 +44,7 @@ def seed_lovs():
 
         # Conciliacion: estadoConcilaciion
         from .models.conciliacion import EstadoConciliacion
-        estado_conciliacion_lovs = ["GENERADA", "CANCELADA", "FINALIZADA"]
+        estado_conciliacion_lovs = ["ABIERTA", "CANCELADA", "PROYECTADA"]
         existentes_estado_c = {e.nombre for e in db.query(EstadoConciliacion).all()}
         for nombre in estado_conciliacion_lovs:
             if nombre not in existentes_estado_c:
@@ -150,11 +150,11 @@ def crear_usuarios_predeterminados():
             "clave": "daf.supervisor"
         },
         {
-            "nombre": "daf.subdirector",
+            "nombre": "daf.jefe",
             "documentoIdentidad": None,
             "correo": "123456789-sub@pucp.edu.pe",
             "rol_nombre": "DAF - Subdirector",
-            "clave": "daf.subdirector"
+            "clave": "daf.jefe"
         },
         {
             "nombre": "admin",

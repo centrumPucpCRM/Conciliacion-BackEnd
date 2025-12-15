@@ -27,7 +27,7 @@ class Programa(Base):
     idSubdirector = Column(Integer, ForeignKey('usuario.id'))
     subdirector = relationship('Usuario', foreign_keys=[idSubdirector])
     idTipoCambio = Column(Integer, ForeignKey('tipo_cambio.id'))
-    tipoCambio = relationship('TipoCambio')
+    tipoCambio = relationship('TipoCambio') 
     fechaInaguracionPropuesta = Column(Date)
     mesPropuesto = Column(Integer)
     noAperturar = Column(Boolean,default=False)
