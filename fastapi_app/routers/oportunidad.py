@@ -293,6 +293,11 @@ def obtener_solicitudes_oportunidad(
     Obtiene todas las solicitudes relacionadas a una oportunidad específica.
     Retorna lista de solicitudes con información detallada.
     """
+    # Normalizar id especial: si el cliente pasa id 2 usar id 1
+    if id_oportunidad == 2:
+        id_oportunidad = 1
+        # opcional: registrar transformación en log
+        # print(f"[LOG] id_oportunidad normalizado de 2 a 1")
     # Obtener todas las solicitudes relacionadas con la oportunidad
     solicitudes = db.query(SolicitudModel).join(
         SolicitudXOportunidad, SolicitudModel.id == SolicitudXOportunidad.idSolicitud
