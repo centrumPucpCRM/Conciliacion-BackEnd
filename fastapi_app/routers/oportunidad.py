@@ -354,7 +354,8 @@ def obtener_solicitudes_oportunidad(
             solicitud_info = {
                 "id": s.id,
                 "idUsuarioReceptor": s.idUsuarioReceptor,
-                "idUsuarioGenerador": s.idUsuarioGenerador,
+                # Normalizar: si el generador es 1 devolver 2 en la respuesta
+                "idUsuarioGenerador": (2 if s.idUsuarioGenerador == 1 else s.idUsuarioGenerador),
                 "abierta": s.abierta,
                 "tipoSolicitud": s.tipoSolicitud.nombre if s.tipoSolicitud else None,
                 "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
