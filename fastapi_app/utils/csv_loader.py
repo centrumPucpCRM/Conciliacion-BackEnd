@@ -2,6 +2,7 @@
 import pandas as pd
 import datetime
 import math
+import pytz
 
 from typing import Dict, Any
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from ..models.propuesta import Propuesta, TipoDePropuesta, EstadoPropuesta
 from ..models.tipo_cambio import TipoCambio
 from ..models.solicitud import Solicitud, TipoSolicitud, ValorSolicitud
 from ..models.rol_permiso import Rol
+from .solicitudes_editar import crear_log_estandarizado
 
 
 def cargar_carteras(db, df):
@@ -248,6 +250,29 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             moneda = 'PEN'
         
         subdireccion = sanitize_value(row.get('programa.subdireccion'))
+        # enRiesgo: Invertir la lógica de aprobadoPorDaf
+        # si aprobadoPorDaf es True/1/"true" -> enRiesgo = False
+        # si aprobadoPorDaf es False/0/"false"/None -> enRiesgo = True
+        aprobado_por_daf = sanitize_value(row.get("programa.aprobadoPorDaf"))
+        if aprobado_por_daf is None:
+            enRiesgo = True
+        elif isinstance(aprobado_por_daf, str):
+            # Valores que se consideran "aprobado" (truthy)
+            truthy_values = ['true', '1', 'yes', 'si', 'sí', 'y', 's']
+            # Valores que se consideran "no aprobado" (falsy)
+            falsy_values = ['false', '0', 'no', 'n', 'f']
+            val_lower = aprobado_por_daf.lower()
+            if val_lower in truthy_values:
+                enRiesgo = False
+            elif val_lower in falsy_values:
+                enRiesgo = True
+            else:
+                # Cualquier otro valor se considera como "no aprobado"
+                enRiesgo = True
+        elif isinstance(aprobado_por_daf, (int, float)):
+            enRiesgo = not bool(aprobado_por_daf)
+        else:
+            enRiesgo = not bool(aprobado_por_daf)
         usuario_nombre = sanitize_value(row.get('usuario.nombre', ''))
         usuario_nombreSubdirector = sanitize_value(row.get('usuario.nombreSubdirector', ''))
         
@@ -291,7 +316,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             cartera=cartera_nombre,
             mes=mes,
             mesPropuesto=mes,
-            metaDeAlumnos=meta_alumnos
+            metaDeAlumnos=meta_alumnos,
+            enRiesgo=enRiesgo  # Leído del CSV
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
@@ -410,9 +436,11 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     idPrograma=idPrograma,
                     idTipoCambio=id_tipo_cambio,
                     montoPropuesto=monto,
+                    descuentoPropuesto=descuento,
                     etapaVentaPropuesta=etapaDeVentas,
                     fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
                     posibleAtipico=posibleAtipico,
+                    vendedora=row.get('oportunidad.vendedora')
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad
@@ -426,6 +454,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
         except Exception as e:
             print(f"[ERROR] Bulk insert final: {e}")
             db.rollback()
+
     return oportunidades_dict
 
 def cargar_tipo_cambio(db):
@@ -447,8 +476,45 @@ def cargar_tipo_cambio(db):
             db.add(tipo_cambio)
             db.flush()
 
+def obtener_meses_validos():
+    """
+    Calcula los meses válidos basados en la fecha actual de Perú.
+    Retorna: mes_conciliado (mes anterior) y meses_anteriores (3 meses anteriores al conciliado)
+    """
+    # Obtener fecha actual en zona horaria de Perú
+    peru_tz = pytz.timezone('America/Lima')
+    fecha_actual = datetime.datetime.now(peru_tz)
+    
+    # Mes conciliado = mes anterior al actual
+    if fecha_actual.month == 1:
+        mes_conciliado = 12
+        año_conciliado = fecha_actual.year - 1
+    else:
+        mes_conciliado = fecha_actual.month - 1
+        año_conciliado = fecha_actual.year
+    
+    # Meses anteriores = 3 meses anteriores al mes conciliado
+    meses_anteriores = []
+    for i in range(1, 4):  # 1, 2, 3 meses antes del conciliado
+        if mes_conciliado - i <= 0:
+            mes_anterior = 12 + (mes_conciliado - i)
+            año_anterior = año_conciliado - 1
+        else:
+            mes_anterior = mes_conciliado - i
+            año_anterior = año_conciliado
+        meses_anteriores.append(f"{mes_anterior:02d}")
+    
+    return f"{mes_conciliado:02d}", meses_anteriores
+
 def crear_solicitudes_subdirectores(db, propuesta_unica):
     from fastapi_app.models.log import Log
+    
+    # Obtener meses válidos
+    mes_conciliado, meses_anteriores = obtener_meses_validos()
+    meses_validos = [mes_conciliado] + meses_anteriores
+    
+    print(f"[INFO] Creando solicitudes de subdirectores solo para programas con mes en: {meses_validos}")
+    
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     
@@ -464,8 +530,19 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
         print(f"[WARNING] No se encontraron usuarios con rol 'Comercial - Subdirector'. Saltando creación de solicitudes.")
         return
     
+    # Verificar que existen programas con meses válidos en esta propuesta
+    programas_validos = db.query(Programa).filter(
+        Programa.idPropuesta == propuesta_unica.id,
+        Programa.mes.in_(meses_validos)
+    ).count()
+    
+    if programas_validos == 0:
+        print(f"[INFO] No se encontraron programas con meses válidos ({meses_validos}) en la propuesta {propuesta_unica.id}. Saltando creación de solicitudes de subdirectores.")
+        return
+    
+    print(f"[INFO] Encontrados {programas_validos} programas con meses válidos para crear solicitudes de subdirectores.")
+    
     solicitudes_bulk = []
-    logs_bulk = []
     
     # Obtener el receptor (DAF Subdirector)
     receptor_usuario = db.query(Usuario).filter(Usuario.nombre == 'daf.subdirector').first()
@@ -488,47 +565,53 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
             abierta=True
         )
         solicitudes_bulk.append(nueva_solicitud)
+    
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
         db.flush()
-        # Refrescar solicitudes_bulk con los ids asignados
-        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
-        for s in solicitudes_db:
-            log_data = {
-                'idSolicitud': s.id,
-                'tipoSolicitud_id': s.tipoSolicitud_id,
-                'creadoEn': datetime.datetime.now(),
-                'auditoria': {
-                    'idUsuarioReceptor': s.idUsuarioReceptor,
-                    'idUsuarioGenerador': s.idUsuarioGenerador,
-                    'idPropuesta': s.idPropuesta,
-                    'comentario': s.comentario,
-                    'abierta': s.abierta,
-                    'valorSolicitud_id': s.valorSolicitud_id
-                }
+        
+        # Crear logs estandarizados para cada solicitud creada
+        solicitudes_db = db.query(Solicitud).filter(
+            Solicitud.idPropuesta == propuesta_unica.id, 
+            Solicitud.tipoSolicitud_id == tipo_aprobacion.id
+        ).all()
+        
+        for solicitud in solicitudes_db:
+            # Datos específicos para solicitudes de subdirectores
+            datos_especificos = {
+                'tipoFlujo': 'Aprobacion Comercial',
+                'accionRealizada': 'Solicitud de aprobación comercial creada automáticamente'
             }
-            log = Log(**log_data)
-            logs_bulk.append(log)
-        db.bulk_save_objects(logs_bulk)
+            crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
+        
         db.flush()
 
 
 def crear_solicitudes_Jp(db, propuesta_unica):
     from fastapi_app.models.log import Log
     
+    # Obtener meses válidos
+    mes_conciliado, meses_anteriores = obtener_meses_validos()
+    meses_validos = [mes_conciliado] + meses_anteriores
+    
+    print(f"[INFO] Creando solicitudes JP solo para programas con mes en: {meses_validos}")
+    
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     
-    # Obtener todos los programas de esta propuesta con JP y Subdirector asignados
+    # Obtener todos los programas de esta propuesta con JP y Subdirector asignados Y con meses válidos
     programas = db.query(Programa).filter(
         Programa.idPropuesta == propuesta_unica.id,
         Programa.idJefeProducto.isnot(None),
-        Programa.idSubdirector.isnot(None)
+        Programa.idSubdirector.isnot(None),
+        Programa.mes.in_(meses_validos)  # ✅ Filtrar solo programas con meses válidos
     ).all()
     
     if not programas:
-        print(f"[WARNING] No se encontraron programas con JP y Subdirector asignados. Saltando creación de solicitudes JP.")
+        print(f"[WARNING] No se encontraron programas con JP, Subdirector asignados y meses válidos ({meses_validos}). Saltando creación de solicitudes JP.")
         return
+    
+    print(f"[INFO] Encontrados {len(programas)} programas con meses válidos para crear solicitudes JP.")
     
     # Crear conjunto de combinaciones únicas (idJefeProducto, idSubdirector)
     combinaciones_unicas = set()
@@ -549,7 +632,6 @@ def crear_solicitudes_Jp(db, propuesta_unica):
     usuarios_dict = {u.id: u for u in usuarios}
     
     solicitudes_bulk = []
-    logs_bulk = []
     
     # Crear UNA solicitud por cada combinación única JP → Subdirector
     for jp_id, subdirector_id in combinaciones_unicas:
@@ -560,7 +642,7 @@ def crear_solicitudes_Jp(db, propuesta_unica):
             print(f"[WARNING] Usuario no encontrado (JP: {jp_id}, Subdirector: {subdirector_id}). Saltando solicitud.")
             continue
         
-        comentario = f"Solicitud de {jp_usuario.nombre} para revisión de {subdirector_usuario.nombre}"
+        comentario = f" El JP {jp_usuario.nombre} esta revisando la solicitud"
         
         nueva_solicitud = Solicitud(
             idUsuarioGenerador=jp_usuario.id,
@@ -573,28 +655,25 @@ def crear_solicitudes_Jp(db, propuesta_unica):
             abierta=True
         )
         solicitudes_bulk.append(nueva_solicitud)
+    
     if solicitudes_bulk:
         db.bulk_save_objects(solicitudes_bulk)
         db.flush()
-        # Refrescar solicitudes_bulk con los ids asignados
-        solicitudes_db = db.query(Solicitud).filter(Solicitud.idPropuesta == propuesta_unica.id, Solicitud.tipoSolicitud_id == tipo_aprobacion.id).all()
-        for s in solicitudes_db:
-            log_data = {
-                'idSolicitud': s.id,
-                'tipoSolicitud_id': s.tipoSolicitud_id,
-                'creadoEn': datetime.datetime.now(),
-                'auditoria': {
-                    'idUsuarioReceptor': s.idUsuarioReceptor,
-                    'idUsuarioGenerador': s.idUsuarioGenerador,
-                    'idPropuesta': s.idPropuesta,
-                    'comentario': s.comentario,
-                    'abierta': s.abierta,
-                    'valorSolicitud_id': s.valorSolicitud_id
-                }
+        
+        # Crear logs estandarizados para cada solicitud creada
+        solicitudes_db = db.query(Solicitud).filter(
+            Solicitud.idPropuesta == propuesta_unica.id, 
+            Solicitud.tipoSolicitud_id == tipo_aprobacion.id
+        ).all()
+        
+        for solicitud in solicitudes_db:
+            # Datos específicos para solicitudes JP
+            datos_especificos = {
+                'tipoFlujo': 'Aprobacion JP',
+                'accionRealizada': 'Solicitud de aprobación JP creada automáticamente'
             }
-            log = Log(**log_data)
-            logs_bulk.append(log)
-        db.bulk_save_objects(logs_bulk)
+            crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
+        
         db.flush()
 
 

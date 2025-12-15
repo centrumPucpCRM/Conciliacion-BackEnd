@@ -2,6 +2,14 @@ from fastapi_app.models.solicitud import Solicitud as SolicitudModel, ValorSolic
 from fastapi_app.models.log import Log
 from datetime import datetime
 from fastapi import HTTPException
+import pytz
+from .solicitudes_editar import crear_log_estandarizado
+
+
+def obtener_fecha_peru():
+	"""Obtiene la fecha actual en zona horaria peruana"""
+	peru_tz = pytz.timezone('America/Lima')
+	return datetime.now(peru_tz).replace(tzinfo=None)
 
 
 def aceptar_rechazar_solicitud_subdirectores(body, db, solicitud):
@@ -55,26 +63,14 @@ def aceptar_rechazar_solicitud_subdirectores(body, db, solicitud):
 	else:
 		raise HTTPException(status_code=400, detail="valorSolicitud debe ser ACEPTADO o RECHAZADO")
 	
-	solicitud.creadoEn = datetime.now()
+	solicitud.creadoEn = obtener_fecha_peru()
 	
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud': valor_solicitud_nombre,
-			'tipo_solicitud': solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else None,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-		}
+	# Crear log estandarizado
+	datos_especificos = {
+		'tipoFlujo': 'Subdirectores',
+		'accionRealizada': f'Solicitud {valor_solicitud_nombre.lower()} por subdirector'
 	}
-	log = Log(**log_data)
-	db.add(log)
+	crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos)
 	
 	db.commit()
 	return {

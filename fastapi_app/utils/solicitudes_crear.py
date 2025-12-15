@@ -9,8 +9,17 @@ from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
 from fastapi_app.models.solicitud import TipoSolicitud, ValorSolicitud
 from datetime import datetime
 from fastapi import  HTTPException
+import pytz
 
 from fastapi_app.schemas import programa
+from .solicitudes_editar import crear_log_estandarizado
+
+# Archivo estandarizado con zona horaria peruana
+
+def obtener_fecha_peru():
+	"""Obtiene la fecha actual en zona horaria peruana"""
+	peru_tz = pytz.timezone('America/Lima')
+	return datetime.now(peru_tz).replace(tzinfo=None)
 
 def crear_solicitud_alumno(body, db):
 	# Determinar tipo de solicitud antes de validar campos
@@ -85,7 +94,7 @@ def crear_solicitud_alumno(body, db):
 		valorSolicitud_id=valor_solicitud_id,
 		idPropuesta=id_propuesta,
 		comentario=comentario,
-		creadoEn=datetime.now()
+		creadoEn=obtener_fecha_peru()
 	)
 	db.add(solicitud)
 	db.commit()
@@ -110,29 +119,16 @@ def crear_solicitud_alumno(body, db):
 	elif tipo_solicitud == "AGREGAR_ALUMNO":
 		# Cambiar el estado en etapaVentaPropuesta a "3 Matriculado"
 		oportunidad.etapaVentaPropuesta = "3 Matriculado"
-		oportunidad.fechaMatriculaPropuesta = datetime.now().date()
+		oportunidad.fechaMatriculaPropuesta = obtener_fecha_peru().date()
 		db.commit()
 
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idOportunidad': id_oportunidad,
-			'montoPropuesto': sxos.montoPropuesto,
-			'montoObjetado': sxos.montoObjetado,
-			'tipo_solicitud': tipo_solicitud,
-		}
+	# Crear log estandarizado
+	datos_especificos = {
+		'idOportunidad': id_oportunidad,
+		'montoPropuesto': sxos.montoPropuesto,
+		'montoObjetado': sxos.montoObjetado,
 	}
-	log = Log(**log_data)
-	db.add(log)
+	crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
 	db.commit()
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
 
@@ -176,7 +172,7 @@ def crear_solicitud_programa(body, db):
 		valorSolicitud_id=valor_solicitud_id,
 		idPropuesta=id_propuesta,
 		comentario=comentario,
-		creadoEn=datetime.now()
+		creadoEn=obtener_fecha_peru()
 	)
 	db.add(solicitud)
 	db.commit()
@@ -197,25 +193,14 @@ def crear_solicitud_programa(body, db):
 	elif tipo_solicitud == "FECHA_CAMBIADA":
 		pass	
 
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idPrograma': id_programa,
-			'noAperturar': getattr(programa, 'noAperturar', None),
-			'tipo_solicitud': tipo_solicitud,
-		}
+	# Crear log estandarizado
+	datos_especificos = {
+		'idPrograma': id_programa,
+		'nombrePrograma': programa.nombre if programa else None,
+		'noAperturar': getattr(programa, 'noAperturar', None),
+		'noCalcular': getattr(programa, 'noCalcular', None),
 	}
-	log = Log(**log_data)
-	db.add(log)
+	crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
 	db.commit()
 	return {"msg": f"Solicitud {tipo_solicitud} creada", "id": solicitud.id}
 
@@ -277,7 +262,7 @@ def crear_solicitud_fecha(body, db):
 		valorSolicitud_id=valor_solicitud_id,
 		idPropuesta=id_propuesta,
 		comentario=comentario,
-		creadoEn=datetime.now()
+		creadoEn=obtener_fecha_peru()
 	)
 	db.add(solicitud)
 	db.commit()
@@ -293,26 +278,14 @@ def crear_solicitud_fecha(body, db):
 	db.add(sxps)
 	db.commit()
 
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idPrograma': id_programa,
-			'fechaInaguracionPropuesta': str(fecha_propuesta),
-			'fechaInaguracionObjetada': None,
-			'tipo_solicitud': "FECHA_CAMBIADA",
-		}
+	# Crear log estandarizado
+	datos_especificos = {
+		'idPrograma': id_programa,
+		'nombrePrograma': programa.nombre if programa else None,
+		'fechaInaguracionPropuesta': str(fecha_propuesta),
+		'fechaInaguracionObjetada': None,
 	}
-	log = Log(**log_data)
-	db.add(log)
+	crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
 	db.commit()
 	return {"msg": "Solicitud FECHA_CAMBIADA creada", "id": solicitud.id}
 
@@ -376,7 +349,7 @@ def crear_solicitud_ELIMINACION_POSIBLE_BECADO(body, db):
 		valorSolicitud_id=valor_pendiente.id,
 		idPropuesta=id_propuesta,
 		comentario=comentario,
-		creadoEn=datetime.now(),
+		creadoEn=obtener_fecha_peru(),
 		abierta=True
 	)
 	db.add(solicitud)
@@ -392,25 +365,13 @@ def crear_solicitud_ELIMINACION_POSIBLE_BECADO(body, db):
 	db.add(solicitud_x_oportunidad)
 	db.flush()
 	
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idOportunidad': id_oportunidad,
-			'montoPropuesto': oportunidad.monto,
-			'tipo_solicitud': "ELIMINACION_POSIBLE_BECADO",
-		}
+	# Crear log estandarizado
+	datos_especificos = {
+		'idOportunidad': id_oportunidad,
+		'montoPropuesto': oportunidad.monto,
+		'accionRealizada': 'Solicitud de eliminación de beca creada',
 	}
-	log = Log(**log_data)
-	db.add(log)
+	crear_log_estandarizado(db, solicitud, "PENDIENTE", datos_especificos)
 	db.commit()
 	
 	return {

@@ -9,6 +9,81 @@ from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
 from fastapi_app.models.solicitud import TipoSolicitud, ValorSolicitud
 from datetime import datetime
 from fastapi import  HTTPException
+import pytz
+
+
+def obtener_fecha_peru():
+	"""Obtiene la fecha actual en zona horaria peruana"""
+	peru_tz = pytz.timezone('America/Lima')
+	return datetime.now(peru_tz).replace(tzinfo=None)
+
+
+def crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos=None):
+	"""
+	Crea un log estandarizado con campos base comunes y datos específicos según el tipo de solicitud.
+	Todos los logs tendrán la misma estructura y zona horaria peruana.
+	
+	Args:
+		db: Sesión de base de datos
+		solicitud: Objeto solicitud
+		valor_solicitud_nombre: Nombre del valor de solicitud (ACEPTADO/RECHAZADO/PENDIENTE)
+		datos_especificos: Dict con datos específicos del tipo de solicitud
+	"""
+	# Obtener fecha peruana
+	fecha_peru = obtener_fecha_peru()
+	
+	# Obtener nombres de usuarios
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	
+	# ✅ EXCEPCIÓN: Si la solicitud es ACEPTADA, intercambiar roles para mostrar quién realizó la acción
+	if valor_solicitud_nombre == "ACEPTADO":
+		# El receptor es quien acepta, así que se convierte en el "generador" del log
+		id_generador_log = solicitud.idUsuarioReceptor
+		nombre_generador_log = usuario_receptor.nombre if usuario_receptor else 'Usuario no encontrado'
+		id_receptor_log = solicitud.idUsuarioGenerador
+		nombre_receptor_log = usuario_generador.nombre if usuario_generador else 'Usuario no encontrado'
+	else:
+		# Para PENDIENTE y RECHAZADO, mantener roles originales
+		id_generador_log = solicitud.idUsuarioGenerador
+		nombre_generador_log = usuario_generador.nombre if usuario_generador else 'Usuario no encontrado'
+		id_receptor_log = solicitud.idUsuarioReceptor
+		nombre_receptor_log = usuario_receptor.nombre if usuario_receptor else 'Usuario no encontrado'
+	
+	# Estructura base común para TODOS los logs
+	auditoria_base = {
+		# ✅ INFORMACIÓN DE USUARIOS (con roles intercambiados si es ACEPTADO)
+		'idUsuarioGenerador': id_generador_log,
+		'nombreUsuarioGenerador': nombre_generador_log,
+		'idUsuarioReceptor': id_receptor_log,
+		'nombreUsuarioReceptor': nombre_receptor_log,
+		
+		# ✅ INFORMACIÓN DE LA SOLICITUD (siempre incluida)
+		'tipoSolicitud': solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else 'Tipo no definido',
+		'valorSolicitud': valor_solicitud_nombre,
+		'comentario': solicitud.comentario or '',
+		'invertido': getattr(solicitud, 'invertido', False),
+		
+		# ✅ INFORMACIÓN DE CONTEXTO (siempre incluida)
+		'idPropuesta': solicitud.idPropuesta,
+		'abierta': solicitud.abierta,
+	}
+	
+	# Agregar datos específicos si existen
+	if datos_especificos:
+		auditoria_base.update(datos_especificos)
+	
+	# Crear el log con fecha peruana
+	log_data = {
+		'idSolicitud': solicitud.id,
+		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
+		'creadoEn': fecha_peru,
+		'auditoria': auditoria_base
+	}
+	
+	log = Log(**log_data)
+	db.add(log)
+	return log
 
 
 def aceptar_rechazar_solicitud_basico(body, db, solicitud):
@@ -86,33 +161,37 @@ def aceptar_rechazar_solicitud_basico(body, db, solicitud):
 	comentario = body.get("comentario")
 	if comentario:
 		solicitud.comentario = comentario
-	solicitud.creadoEn = datetime.now()
+	solicitud.creadoEn = obtener_fecha_peru()
 
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 
-	# Crear log de auditoría detallado
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud': valor_solicitud_nombre,
-			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'invertido': solicitud.invertido,
-			'montoPropuesto': None,
-			'montoObjetado': None,
-		}
-	}
-	log = Log(**log_data)
-	db.add(log)
+	# Datos específicos para solicitudes básicas (EXCLUSION_PROGRAMA, AGREGAR_ALUMNO)
+	datos_especificos = {}
+	
+	if tipo_solicitud == "EXCLUSION_PROGRAMA":
+		sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
+		if sxp:
+			programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+			datos_especificos = {
+				'idPrograma': sxp.idPrograma,
+				'nombrePrograma': programa.nombre if programa else None,
+				'noAperturar': programa.noAperturar if programa else None,
+				'noCalcular': programa.noCalcular if programa else None,
+			}
+	
+	elif tipo_solicitud == "AGREGAR_ALUMNO":
+		sxo = db.query(SolicitudXOportunidad).filter_by(idSolicitud=solicitud.id).first()
+		if sxo:
+			oportunidad = db.query(Oportunidad).filter_by(id=sxo.idOportunidad).first()
+			datos_especificos = {
+				'idOportunidad': sxo.idOportunidad,
+				'etapaVentaPropuesta': oportunidad.etapaVentaPropuesta if oportunidad else None,
+			}
+	
+	# Crear log estandarizado
+	crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos)
 
 	db.commit()
 	return {
@@ -139,6 +218,16 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 		oportunidad.montoPropuesto = sxop.montoObjetado
 	else:
 		oportunidad.montoPropuesto = sxop.montoPropuesto
+	
+	# Calcular y actualizar descuentoPropuesto basado en el precio de lista del programa
+	if oportunidad and oportunidad.idPrograma:
+		programa = db.query(Programa).filter_by(id=oportunidad.idPrograma).first()
+		if programa and programa.precioDeLista and programa.precioDeLista > 0:
+			# Calcular el porcentaje de descuento: (precio_lista - monto_propuesto) / precio_lista
+			nuevo_descuento = (programa.precioDeLista - oportunidad.montoPropuesto) / programa.precioDeLista
+			# Asegurar que el descuento esté entre 0 y 1
+			nuevo_descuento = max(0, min(1, nuevo_descuento))
+			oportunidad.descuentoPropuesto = nuevo_descuento
 	comentario = body.get("comentario")
 	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
 	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
@@ -150,199 +239,80 @@ def aceptar_rechazar_edicion_alumno(body, db, solicitud):
 			+ f" \n Monto Propuesto por  {nombre_receptor} : " + str(sxop.montoPropuesto)
 			+ f" \n Monto Objetado por  {nombre_generador} : " + str(sxop.montoObjetado)
 		)
-	solicitud.creadoEn = datetime.now()
+	solicitud.creadoEn = obtener_fecha_peru()
 
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 
 
-	# Obtener nombres de usuario generador y receptor
-	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
-	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
-	nombre_generador = usuario_generador.nombre if usuario_generador else None
-	nombre_receptor = usuario_receptor.nombre if usuario_receptor else None
-
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'nombreUsuarioReceptor': nombre_receptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'nombreUsuarioGenerador': nombre_generador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud': valor_solicitud_nombre,
-			'idPropuesta': solicitud.idPropuesta,
-			'abierta': solicitud.abierta,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
-			'idPropuesta': solicitud.idPropuesta,
-			'abierta': solicitud.abierta,
-			'montoPropuesto': sxop.montoPropuesto,
-			'montoObjetado': sxop.montoObjetado,
-		}
+	# Datos específicos para edición de alumno
+	datos_especificos = {
+		'idOportunidad': sxop.idOportunidad,
+		'montoPropuesto': sxop.montoPropuesto,
+		'montoObjetado': sxop.montoObjetado,
+		'descuentoPropuesto': oportunidad.descuentoPropuesto if oportunidad else None,
 	}
-	log = Log(**log_data)
-	db.add(log)
+	
+	# Crear log estandarizado
+	crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos)
 
 	db.commit()
 	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
 
 def aceptar_rechazar_fecha_cambiada(body, db, solicitud):
-	"""
-	Acepta o rechaza una solicitud de tipo FECHA_CAMBIADA con lógica de ping-pong invertida.
-	
-	Lógica ping-pong:
-	- ACEPTADO con invertido=False: Aplica la fecha propuesta al programa (comportamiento normal)
-	- ACEPTADO con invertido=True: NO aplica la fecha propuesta (comportamiento invertido - acepta rechazo)
-	- RECHAZADO: Invierte flag, intercambia roles y propone nueva fecha (permite ping-pong)
-	"""
 	valor_solicitud_nombre = body.get("valorSolicitud")
-	print(f"[LOG] valorSolicitud recibido: {valor_solicitud_nombre}")
-
-	# Buscar la relación SolicitudXPrograma
 	sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
-	print(f"[LOG] sxp encontrado: {sxp}")
-	if not sxp:
-		print("[ERROR] No se encontró la relación solicitud-programa")
-		raise HTTPException(status_code=400, detail="No se encontró la relación solicitud-programa")
-
-	# Obtener el programa
-	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
-	print(f"[LOG] programa encontrado: {programa}")
-	if not programa:
-		print("[ERROR] Programa no encontrado")
-		raise HTTPException(status_code=400, detail="Programa no encontrado")
-
-	accion_realizada = ""
-
-	# CASO: ACEPTADO - Aplicar lógica según flag invertido
-	if valor_solicitud_nombre == "ACEPTADO":
-		print(f"[LOG] Entrando a ACEPTADO, invertido={solicitud.invertido}")
-		# Determinar qué fecha usar (objetada tiene prioridad si existe)
-		fecha_a_aplicar = sxp.fechaInaguracionObjetada if sxp.fechaInaguracionObjetada else sxp.fechaInaguracionPropuesta
-		print(f"[LOG] Fecha a aplicar: {fecha_a_aplicar}")
-
-		if not solicitud.invertido:
-			# Comportamiento normal: ACEPTAR = Aplicar la fecha propuesta
-			if fecha_a_aplicar:
-				programa.fechaInaguracionPropuesta = fecha_a_aplicar
-				accion_realizada = f"Fecha {fecha_a_aplicar} aplicada al programa"
-				print(f"[LOG] {accion_realizada}")
-		else:
-			# Comportamiento invertido: ACEPTAR = NO aplicar fecha (mantener fecha original)
-			# No se modifica programa.fechaInaguracionPropuesta
-			accion_realizada = f"Fecha NO modificada - se aceptó el rechazo del cambio de fecha"
-			print(f"[LOG] {accion_realizada}")
-
-	# CASO: RECHAZADO - Invertir flag e intercambiar roles, proponer nueva fecha
-	elif valor_solicitud_nombre == "RECHAZADO":
-		print(f"[LOG] Entrando a RECHAZADO, invertido actual={solicitud.invertido}")
-		# Invertir el flag
-		solicitud.invertido = not solicitud.invertido
-		print(f"[LOG] invertido ahora={solicitud.invertido}")
-
-		# Intercambiar roles
+	
+	if valor_solicitud_nombre == "RECHAZADO":
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
-		print(f"[LOG] Intercambiados generador/receptor: gen={solicitud.idUsuarioGenerador}, rec={solicitud.idUsuarioReceptor}")
-
-		# Obtener la nueva fecha propuesta del body (obligatoria al rechazar)
-		nueva_fecha_objetada = body.get("fechaInaguracionPropuesta")
-		print(f"[LOG] Nueva fecha objetada recibida: {nueva_fecha_objetada}")
-		if not nueva_fecha_objetada:
-			print("[ERROR] Debe proporcionar una fecha al rechazar (fechaInaguracionPropuesta)")
-			raise HTTPException(status_code=400, detail="Debe proporcionar una fecha al rechazar (fechaInaguracionPropuesta)")
-
-		# Manejar intercambio de fechas
+		# Buscar la relación SolicitudXPrograma
 		if sxp.fechaInaguracionObjetada:
-			# Ya había una fecha objetada, intercambiar
-			print(f"[LOG] Intercambiando fechas: propuesta={sxp.fechaInaguracionPropuesta}, objetada={sxp.fechaInaguracionObjetada}")
 			sxp.fechaInaguracionPropuesta = sxp.fechaInaguracionObjetada
-			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
+			sxp.fechaInaguracionObjetada = body.get("fechaInaguracionPropuesta")
 		else:
-			# Primera vez que se rechaza, la fecha propuesta pasa a objetada
-			print(f"[LOG] Primera vez rechazado, seteando objetada={nueva_fecha_objetada}")
-			sxp.fechaInaguracionObjetada = nueva_fecha_objetada
-
-		accion_realizada = f"Solicitud rechazada"
-		print(f"[LOG] {accion_realizada}")
-
-	# Construir comentario
-	comentario = body.get("comentario", "")
+			sxp.fechaInaguracionObjetada = body.get("fechaInaguracionPropuesta")
+	
+	# Actualizar la fechaInaguracionPropuesta en Programa si corresponde
+	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+	if sxp.fechaInaguracionObjetada:
+		programa.fechaInaguracionPropuesta = sxp.fechaInaguracionObjetada
+	else:
+		programa.fechaInaguracionPropuesta = sxp.fechaInaguracionPropuesta
+	
+	comentario = body.get("comentario")
 	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
 	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
 	nombre_generador = usuario_generador.nombre if usuario_generador else "-"
 	nombre_receptor = usuario_receptor.nombre if usuario_receptor else "-"
-
+	
 	if comentario:
-		print(f"[LOG] Comentario base: {comentario}")
 		solicitud.comentario = (
 			comentario
-			+ f"\nFecha Propuesta por {nombre_receptor}: {sxp.fechaInaguracionPropuesta}"
+			+ f" \n Fecha Propuesta por  {nombre_receptor} : " + str(sxp.fechaInaguracionPropuesta)
+			+ f" \n Fecha Objetada por  {nombre_generador} : " + str(sxp.fechaInaguracionObjetada)
 		)
-		if sxp.fechaInaguracionObjetada:
-			solicitud.comentario += f"\nFecha Objetada por {nombre_generador}: {sxp.fechaInaguracionObjetada}"
-		solicitud.comentario += f"\n{accion_realizada}"
+	
+	solicitud.creadoEn = obtener_fecha_peru()
 
-	solicitud.creadoEn = datetime.now()
-	print(f"[LOG] Timestamp actualizado: {solicitud.creadoEn}")
-
-	# Actualizar valor de solicitud
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
-	print(f"[LOG] valorSolicitud_obj: {valor_solicitud_obj}")
-	if not valor_solicitud_obj:
-		print(f"[ERROR] ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
-		raise HTTPException(status_code=400, detail=f"ValorSolicitud '{valor_solicitud_nombre}' no encontrado")
-
 	solicitud.valorSolicitud = valor_solicitud_obj
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
-	print(f"[LOG] valorSolicitud_id actualizado: {solicitud.valorSolicitud_id}")
 
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': getattr(solicitud, 'tipoSolicitud_id', None),
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'nombreUsuarioReceptor': nombre_receptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'nombreUsuarioGenerador': nombre_generador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud': valor_solicitud_nombre,
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'tipo_solicitud': solicitud.tipoSolicitud.nombre,
-			'idPrograma': sxp.idPrograma,
-			'invertido': solicitud.invertido,
-			'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
-			'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-			'fechaAplicadaAlPrograma': str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
-			'accion_realizada': accion_realizada,
-		}
+	# Datos específicos para cambio de fecha
+	programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+	datos_especificos = {
+		'idPrograma': sxp.idPrograma,
+		'nombrePrograma': programa.nombre if programa else None,
+		'fechaInaguracionPropuesta': str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
+		'fechaInaguracionObjetada': str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
 	}
-	print(f"[LOG] log_data: {log_data}")
-	log = Log(**log_data)
-	db.add(log)
+	
+	# Crear log estandarizado
+	crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos)
 
 	db.commit()
-	print(f"[LOG] Commit realizado correctamente")
-	return {
-		"msg": "Solicitud de cambio de fecha actualizada correctamente",
-		"idSolicitud": solicitud.id,
-		"valorSolicitud": valor_solicitud_nombre,
-		"idPrograma": programa.id,
-		"invertido": solicitud.invertido,
-		"fechaInaguracionPropuesta": str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
-		"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None,
-		"fechaAplicadaAlPrograma": str(programa.fechaInaguracionPropuesta) if valor_solicitud_nombre == "ACEPTADO" and not solicitud.invertido else None,
-		"accionRealizada": accion_realizada
-	}
+	return {"msg": "Solicitud actualizada correctamente", "idSolicitud": solicitud.id, "valorSolicitud": valor_solicitud_nombre}
 
 def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	"""
@@ -392,7 +362,7 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 		# Solo invertir el flag e intercambiar roles, NO tocar al alumno
 		solicitud.invertido = not solicitud.invertido
 		
-		comentario_rechazo = f"\nEl usuario {nombre_usuario} rechazó la solicitud (lógica invertida: {solicitud.invertido})\n"
+		comentario_rechazo = f"\nEl usuario {nombre_usuario} rechazó la solicitud\n"
 		
 		# Intercambiar generador y receptor para ping-pong
 		solicitud.idUsuarioGenerador, solicitud.idUsuarioReceptor = solicitud.idUsuarioReceptor, solicitud.idUsuarioGenerador
@@ -403,7 +373,7 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	else:
 		raise HTTPException(status_code=400, detail="valorSolicitud debe ser ACEPTADO o RECHAZADO")
 	
-	solicitud.creadoEn = datetime.now()
+	solicitud.creadoEn = obtener_fecha_peru()
 	
 	# Actualizar valor de solicitud
 	valor_solicitud_obj = db.query(ValorSolicitud).filter_by(nombre=valor_solicitud_nombre).first()
@@ -412,28 +382,15 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 	
 	solicitud.valorSolicitud_id = valor_solicitud_obj.id
 	
-	# Crear log de auditoría
-	log_data = {
-		'idSolicitud': solicitud.id,
-		'tipoSolicitud_id': solicitud.tipoSolicitud_id,
-		'creadoEn': solicitud.creadoEn,
-		'auditoria': {
-			'idUsuarioReceptor': solicitud.idUsuarioReceptor,
-			'idUsuarioGenerador': solicitud.idUsuarioGenerador,
-			'idPropuesta': solicitud.idPropuesta,
-			'comentario': solicitud.comentario,
-			'abierta': solicitud.abierta,
-			'valorSolicitud': valor_solicitud_nombre,
-			'tipo_solicitud': 'ELIMINACION_POSIBLE_BECADO',
-			'valorSolicitud_id': solicitud.valorSolicitud_id,
-			'idOportunidad': sxo.idOportunidad,
-			'invertido': solicitud.invertido,
-			'oportunidad_eliminada': oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
-			'accion_realizada': accion_realizada,
-		}
+	# Datos específicos para eliminación de posible becado
+	datos_especificos = {
+		'idOportunidad': sxo.idOportunidad,
+		'oportunidadEliminada': oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
+		'accionRealizada': accion_realizada,
 	}
-	log = Log(**log_data)
-	db.add(log)
+	
+	# Crear log estandarizado
+	crear_log_estandarizado(db, solicitud, valor_solicitud_nombre, datos_especificos)
 	
 	db.commit()
 	return {
@@ -445,3 +402,340 @@ def aceptar_rechazar_ELIMINACION_POSIBLE_BECADO(body, db, solicitud):
 		"oportunidadEliminada": oportunidad.eliminado if valor_solicitud_nombre == "ACEPTADO" else None,
 		"accionRealizada": accion_realizada
 	}
+
+def generar_mensaje_amigable_log(log):
+	"""
+	Genera un mensaje amigable y comprensible para mostrar en la interfaz de usuario.
+	Explica claramente qué pasó en cada paso de la solicitud.
+	
+	Args:
+		log: Objeto Log con auditoria JSON
+		
+	Returns:
+		dict: Información estructurada para la interfaz
+	"""
+	auditoria = log.auditoria
+	tipo_solicitud = auditoria.get('tipoSolicitud')
+	valor_solicitud = auditoria.get('valorSolicitud')
+	invertido = auditoria.get('invertido', False)
+	usuario_generador = auditoria.get('nombreUsuarioGenerador', 'Usuario')
+	usuario_receptor = auditoria.get('nombreUsuarioReceptor', 'Usuario')
+	
+	# Estructura base
+	resultado = {
+		'id': log.id,
+		'fecha': log.creadoEn.strftime('%d/%m/%Y %H:%M') if log.creadoEn else None,
+		'tipoSolicitud': tipo_solicitud,
+		'valorSolicitud': valor_solicitud,
+		'invertido': invertido,
+		'usuarioGenerador': usuario_generador,
+		'usuarioReceptor': usuario_receptor,
+		'comentario': auditoria.get('comentario', ''),
+		'icono': '',
+		'color': '',
+		'titulo': '',
+		'descripcion': '',
+		'detalles': []
+	}
+	
+	# Generar mensajes específicos según tipo de solicitud
+	if valor_solicitud == "PENDIENTE":
+		# Caso especial: creación de solicitud
+		resultado.update({
+			'icono': '📝',
+			'color': 'blue',
+			'titulo': f'{usuario_generador} CREÓ la solicitud',
+			'descripcion': f'Se creó una nueva solicitud de tipo {tipo_solicitud.replace("_", " ")}',
+			'detalles': [
+				f'Tipo: {tipo_solicitud.replace("_", " ")}',
+				f'Creado por: {usuario_generador}',
+				f'Dirigido a: {usuario_receptor}',
+				'Estado: Pendiente de revisión'
+			]
+		})
+	elif tipo_solicitud == "EXCLUSION_PROGRAMA":
+		programa = auditoria.get('nombrePrograma', 'Programa')
+		no_aperturar = auditoria.get('noAperturar')
+		
+		if valor_solicitud == "ACEPTADO":
+			if not invertido:
+				resultado.update({
+					'icono': '🚫',
+					'color': 'red',
+					'titulo': f'{usuario_generador} EXCLUYÓ el programa',
+					'descripcion': f'Se aceptó la solicitud de exclusión del programa "{programa}"',
+					'detalles': [
+						f'Programa: {programa}',
+						'Estado: Excluido (no se aperturará)',
+						f'Decisión tomada por: {usuario_generador}'
+					]
+				})
+			else:
+				resultado.update({
+					'icono': '✅',
+					'color': 'green',
+					'titulo': f'{usuario_generador} INCLUYÓ el programa',
+					'descripcion': f'Se aceptó el rechazo previo, el programa "{programa}" se aperturará',
+					'detalles': [
+						f'Programa: {programa}',
+						'Estado: Incluido (se aperturará)',
+						f'Decisión tomada por: {usuario_generador}',
+						'Nota: Se aceptó un rechazo previo'
+					]
+				})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '↩️',
+				'color': 'orange',
+				'titulo': f'{usuario_generador} RECHAZÓ la exclusión',
+				'descripcion': f'Se rechazó la solicitud y se devolvió a {usuario_generador}',
+				'detalles': [
+					f'Programa: {programa}',
+					f'Rechazado por: {usuario_receptor}',
+					f'Devuelto a: {usuario_generador}',
+					'La solicitud continúa en proceso (ping-pong)'
+				]
+			})
+	
+	elif tipo_solicitud == "AGREGAR_ALUMNO":
+		etapa_venta = auditoria.get('etapaVentaPropuesta')
+		
+		if valor_solicitud == "ACEPTADO":
+			if not invertido:
+				resultado.update({
+					'icono': '👤➕',
+					'color': 'green',
+					'titulo': f'{usuario_generador} AGREGÓ al alumno',
+					'descripcion': 'Se aceptó la solicitud de agregar alumno',
+					'detalles': [
+						f'Etapa de venta: {etapa_venta}',
+						f'Agregado por: {usuario_receptor}',
+						'Estado: Alumno agregado exitosamente'
+					]
+				})
+			else:
+				resultado.update({
+					'icono': '👤❌',
+					'color': 'red',
+					'titulo': f'{usuario_generador} NO AGREGÓ al alumno',
+					'descripcion': 'Se aceptó el rechazo previo, el alumno no será agregado',
+					'detalles': [
+						f'Etapa de venta: {etapa_venta}',
+						f'Decisión tomada por: {usuario_receptor}',
+						'Estado: Alumno NO agregado',
+						'Nota: Se aceptó un rechazo previo'
+					]
+				})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '↩️',
+				'color': 'orange',
+				'titulo': f'{usuario_generador} RECHAZÓ agregar alumno',
+				'descripcion': f'Se rechazó la solicitud y se devolvió a {usuario_generador}',
+				'detalles': [
+					f'Rechazado por: {usuario_receptor}',
+					f'Devuelto a: {usuario_generador}',
+					'La solicitud continúa en proceso (ping-pong)'
+				]
+			})
+	
+	elif tipo_solicitud == "EDICION_ALUMNO":
+		monto_propuesto = auditoria.get('montoPropuesto')
+		monto_objetado = auditoria.get('montoObjetado')
+		descuento = auditoria.get('descuentoPropuesto')
+		
+		if valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '💰✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} ACEPTÓ el monto propuesto',
+				'descripcion': 'Se aprobó la propuesta de monto',
+				'detalles': [
+					f'Monto final: S/ {monto_propuesto:,.2f}' if monto_propuesto else 'Monto no especificado',
+					f'Descuento aplicado: {descuento*100:.1f}%' if descuento else 'Sin descuento',
+					f'Aprobado por: {usuario_receptor}'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '💰↩️',
+				'color': 'orange',
+				'titulo': f'{usuario_generador} OBJETÓ el monto',
+				'descripcion': 'Se propuso un monto diferente',
+				'detalles': [
+					f'Monto original: S/ {monto_propuesto:,.2f}' if monto_propuesto else 'No especificado',
+					f'Monto objetado: S/ {monto_objetado:,.2f}' if monto_objetado else 'No especificado',
+					f'Objetado por: {usuario_receptor}',
+					f'Devuelto a: {usuario_generador}'
+				]
+			})
+	
+	elif tipo_solicitud == "FECHA_CAMBIADA":
+		programa = auditoria.get('nombrePrograma', 'Programa')
+		fecha_propuesta = auditoria.get('fechaInaguracionPropuesta')
+		fecha_objetada = auditoria.get('fechaInaguracionObjetada')
+		
+		if valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '📅✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} ACEPTÓ el cambio de fecha',
+				'descripcion': f'Se aprobó la nueva fecha para "{programa}"',
+				'detalles': [
+					f'Programa: {programa}',
+					f'Fecha aprobada: {fecha_propuesta}' if fecha_propuesta else 'Fecha no especificada',
+					f'Aprobado por: {usuario_receptor}'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '📅↩️',
+				'color': 'orange',
+				'titulo': f'{usuario_generador} OBJETÓ la fecha',
+				'descripcion': 'Se propuso una fecha diferente',
+				'detalles': [
+					f'Programa: {programa}',
+					f'Fecha original: {fecha_propuesta}' if fecha_propuesta else 'No especificada',
+					f'Fecha objetada: {fecha_objetada}' if fecha_objetada else 'No especificada',
+					f'Objetado por: {usuario_receptor}',
+					f'Devuelto a: {usuario_generador}'
+				]
+			})
+	
+	elif tipo_solicitud == "ELIMINACION_POSIBLE_BECADO":
+		oportunidad_eliminada = auditoria.get('oportunidadEliminada')
+		accion_realizada = auditoria.get('accionRealizada', '')
+		
+		if valor_solicitud == "ACEPTADO":
+			if not invertido:
+				resultado.update({
+					'icono': '🎓❌',
+					'color': 'red',
+					'titulo': f'{usuario_generador} ELIMINÓ la beca',
+					'descripcion': 'Se aceptó la solicitud de eliminación de beca',
+					'detalles': [
+						'Estado: Beca eliminada',
+						f'Eliminado por: {usuario_receptor}',
+						f'Acción: {accion_realizada}'
+					]
+				})
+			else:
+				resultado.update({
+					'icono': '🎓✅',
+					'color': 'green',
+					'titulo': f'{usuario_generador} CONSERVÓ la beca',
+					'descripcion': 'Se aceptó el rechazo previo, la beca se mantiene',
+					'detalles': [
+						'Estado: Beca conservada',
+						f'Decisión tomada por: {usuario_receptor}',
+						f'Acción: {accion_realizada}',
+						'Nota: Se aceptó un rechazo previo'
+					]
+				})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '↩️',
+				'color': 'orange',
+				'titulo': f'{usuario_generador} RECHAZÓ eliminar beca',
+				'descripcion': f'Se rechazó la eliminación y se devolvió a {usuario_generador}',
+				'detalles': [
+					f'Rechazado por: {usuario_receptor}',
+					f'Devuelto a: {usuario_generador}',
+					'La beca permanece sin cambios por ahora',
+					'La solicitud continúa en proceso (ping-pong)'
+				]
+			})
+	
+	elif tipo_solicitud == "APROBACION_COMERCIAL":
+		if valor_solicitud == "PENDIENTE":
+			resultado.update({
+				'icono': '📋',
+				'color': 'blue',
+				'titulo': f'{usuario_generador} SOLICITÓ aprobación comercial',
+				'descripcion': 'Se creó una solicitud de aprobación comercial',
+				'detalles': [
+					f'Solicitado por: {usuario_generador}',
+					f'Dirigido a: {usuario_receptor}',
+					'Estado: Pendiente de aprobación'
+				]
+			})
+		elif valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} APROBÓ comercialmente',
+				'descripcion': 'Se aprobó la solicitud comercial',
+				'detalles': [
+					f'Aprobado por: {usuario_generador}',
+					'Estado: Aprobación comercial otorgada'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '❌',
+				'color': 'red',
+				'titulo': f'{usuario_generador} RECHAZÓ aprobación comercial',
+				'descripcion': 'Se rechazó la solicitud comercial',
+				'detalles': [
+					f'Rechazado por: {usuario_generador}',
+					'Estado: Aprobación comercial denegada'
+				]
+			})
+	
+	elif tipo_solicitud == "APROBACION_JP":
+		if valor_solicitud == "PENDIENTE":
+			resultado.update({
+				'icono': '📋',
+				'color': 'blue',
+				'titulo': f'{usuario_generador} SOLICITÓ aprobación JP',
+				'descripcion': 'Se creó una solicitud de aprobación de Jefe de Producto',
+				'detalles': [
+					f'Solicitado por: {usuario_generador}',
+					f'Dirigido a: {usuario_receptor}',
+					'Estado: Pendiente de aprobación'
+				]
+			})
+		elif valor_solicitud == "ACEPTADO":
+			resultado.update({
+				'icono': '✅',
+				'color': 'green',
+				'titulo': f'{usuario_generador} APROBÓ como JP',
+				'descripcion': 'Se aprobó la solicitud de Jefe de Producto',
+				'detalles': [
+					f'Aprobado por: {usuario_generador}',
+					'Estado: Aprobación JP otorgada'
+				]
+			})
+		else:  # RECHAZADO
+			resultado.update({
+				'icono': '❌',
+				'color': 'red',
+				'titulo': f'{usuario_generador} RECHAZÓ aprobación JP',
+				'descripcion': 'Se rechazó la solicitud de Jefe de Producto',
+				'detalles': [
+					f'Rechazado por: {usuario_generador}',
+					'Estado: Aprobación JP denegada'
+				]
+			})
+	
+	# Casos para otros tipos de solicitud
+	else:
+		resultado.update({
+			'icono': '📋',
+			'color': 'gray',
+			'titulo': f'Solicitud {valor_solicitud.lower()}',
+			'descripcion': f'Solicitud de tipo {tipo_solicitud}',
+			'detalles': [
+				f'Tipo: {tipo_solicitud}',
+				f'Estado: {valor_solicitud}',
+				f'Usuario: {usuario_generador if valor_solicitud == "ACEPTADO" else usuario_receptor}'
+			]
+		})
+	
+	return resultado
+
+def obtener_resumen_log_por_tipo(log):
+	"""
+	Función de compatibilidad que usa la nueva función de mensajes amigables.
+	"""
+	return generar_mensaje_amigable_log(log)

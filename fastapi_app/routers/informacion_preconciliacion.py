@@ -1,13 +1,12 @@
 
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+
+from fastapi_app.database import get_db
 from fastapi_app.models.propuesta import Propuesta
 from fastapi_app.models.programa import Programa
 from fastapi_app.models.oportunidad import Oportunidad
-from datetime import datetime, timedelta
-
-
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
-from fastapi_app.database import get_db
 from fastapi_app.models.solicitud import Solicitud as SolicitudModel
 from fastapi_app.models.solicitud_x_oportunidad import SolicitudXOportunidad
 from fastapi_app.models.solicitud_x_programa import SolicitudXPrograma
@@ -16,29 +15,15 @@ from fastapi_app.models.usuario import Usuario
 from fastapi_app.models.cartera import Cartera
 from fastapi_app.models.rol_permiso import Rol
 
-# def obtener_carteras_usuario(id_usuario: int, db: Session):
-#     usuario = db.query(Usuario).get(id_usuario)
-#     if not usuario:
-#         return []
-#     # Si el usuario tiene relación many-to-many con carteras
-#     carteras = usuario.carteras if hasattr(usuario, 'carteras') else []
-#     return [
-#         {
-#             "id": c.id,
-#             "nombre": c.nombre,
-#             "descripcion": getattr(c, "descripcion", None)
-#         }
-#         for c in carteras
-#     ]
-
 
 def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Session):
     """
     Obtiene solicitudes de tipo APROBACION_JP para un usuario y propuesta.
+    Busca donde el usuario sea RECEPTOR de las solicitudes (las que debe aprobar).
     Retorna lista de solicitudes con su estado abierta (bool).
     """
     solicitudes = db.query(SolicitudModel).filter(
-        ((SolicitudModel.idUsuarioGenerador == id_usuario)),
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
         SolicitudModel.idPropuesta == id_propuesta
     ).all()
     
@@ -50,20 +35,58 @@ def obtener_solicitudes_aprobacion_jp(id_usuario: int, id_propuesta: int, db: Se
                 "abierta": s.abierta,
                 "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
                 "comentario": s.comentario,
-                "creadoEn": s.creadoEn
+                "creadoEn": s.creadoEn,
+                "idUsuarioGenerador": s.idUsuarioGenerador,
+                "idUsuarioReceptor": s.idUsuarioReceptor
             })
     
     return solicitudes_aprobacion_jp
 
-def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
-    if id_usuario == 2: 
-        id_usuario = 1
+def obtener_solicitudes_aprobacion_comercial(id_usuario: int, id_propuesta: int, db: Session):
+    """
+    Obtiene solicitudes de tipo APROBACION_COMERCIAL para un usuario y propuesta.
+    Para DAF Subdirector, busca donde sea RECEPTOR de las solicitudes.
+    Retorna lista de solicitudes con su estado abierta (bool).
+    """
+    solicitudes = db.query(SolicitudModel).filter(
+        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        SolicitudModel.idPropuesta == id_propuesta
+    ).all()
     
-    # Obtener el usuario y TODOS sus roles
+    solicitudes_aprobacion_comercial = []
+    for s in solicitudes:
+        if s.tipoSolicitud and s.tipoSolicitud.nombre == "APROBACION_COMERCIAL":
+            solicitudes_aprobacion_comercial.append({
+                "id": s.id,
+                "abierta": s.abierta,
+                "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+                "comentario": s.comentario,
+                "creadoEn": s.creadoEn,
+                "idUsuarioGenerador": s.idUsuarioGenerador,
+                "idUsuarioReceptor": s.idUsuarioReceptor
+            })
+    
+    return solicitudes_aprobacion_comercial
+
+def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Session):
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
     roles_usuario = set()
     if usuario and usuario.roles:
         roles_usuario = {rol.nombre for rol in usuario.roles}
+    
+    supervisor_daf = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre == "DAF - Supervisor"
+    ).first()
+    id_supervisor_daf = supervisor_daf.id if supervisor_daf else None
+    
+    subdirector_daf = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre == "DAF - Subdirector"
+    ).first()
+    id_subdirector_daf = subdirector_daf.id if subdirector_daf else None
+    
+    ids_usuarios_consulta = [id_usuario]
+    if "DAF - Subdirector" in roles_usuario and id_supervisor_daf:
+        ids_usuarios_consulta.append(id_supervisor_daf)
     
     # Verificar si tiene rol de Jefe de Producto
     es_jefe_producto = "Comercial - Jefe de producto" in roles_usuario
@@ -77,10 +100,12 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
 
     tipos_oportunidad = {"AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_POSIBLE_BECADO"}
     tipo_programa = {"EXCLUSION_PROGRAMA","FECHA_CAMBIADA"}
+    
+    # Consultar solicitudes para todos los IDs de usuarios relevantes
     solicitudes = db.query(SolicitudModel).filter(
-        ((SolicitudModel.idUsuarioGenerador == id_usuario) | (SolicitudModel.idUsuarioReceptor == id_usuario)),
+        ((SolicitudModel.idUsuarioGenerador.in_(ids_usuarios_consulta)) | (SolicitudModel.idUsuarioReceptor.in_(ids_usuarios_consulta))),
         SolicitudModel.idPropuesta == id_propuesta
-    ).all()
+    ).order_by(SolicitudModel.id.desc()).all()
     solicitudesPropuestaOportunidad = []
     solicitudesPropuestaPrograma = []
     solicitudesGenerales = []
@@ -146,60 +171,81 @@ def obtener_solicitudes_agrupadas(id_usuario: int, id_propuesta: int, db: Sessio
             oportunidad=oportunidad,
             programa=programa
         ).model_dump()
+        
         tipo = solicitud_dict["tipoSolicitud"]
+        
+        # Solo aplicar cambio de IDs para solicitudes de oportunidad y programa (NO generales)
+        if tipo in tipos_oportunidad or tipo in tipo_programa:
+            # Si el usuario actual es DAF Subdirector, cambiar los IDs del supervisor por el subdirector
+            if "DAF - Subdirector" in roles_usuario and id_supervisor_daf and id_subdirector_daf:
+                # Cambiar ID del supervisor por el del subdirector en ambos campos
+                if solicitud_dict["idUsuarioReceptor"] == id_supervisor_daf:
+                    solicitud_dict["idUsuarioReceptor"] = id_subdirector_daf
+                if solicitud_dict["idUsuarioGenerador"] == id_supervisor_daf:
+                    solicitud_dict["idUsuarioGenerador"] = id_subdirector_daf
+        
+        # Clasificar solicitudes
         if tipo in tipos_oportunidad:
             solicitudesPropuestaOportunidad.append(solicitud_dict)
         elif tipo in tipo_programa:
             solicitudesPropuestaPrograma.append(solicitud_dict)
         else:
+            # Las solicitudes generales NO se modifican, mantienen los IDs originales
             solicitudesGenerales.append(solicitud_dict)
     
-    # Si el usuario tiene rol de Jefe de Producto, siempre devuelve solicitudes de oportunidad/programa
-    if es_jefe_producto:
-        # Si además tiene rol de Comercial - Subdirector, agregar APROBACION_JP filtradas
+    # Determinar qué mostrar según las combinaciones específicas de roles
+    response = {}
+    print(roles_usuario)
+    # Caso 1: JP (solo o con Subdirector Comercial)
+    if "Comercial - Jefe de producto" in roles_usuario:
+        print("# Caso 1: JP (solo o con Subdirector Comercial)")
+        # Siempre incluir oportunidades y programas para JP
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+        
+        # Si además es Subdirector Comercial, agregar APROBACION_JP
         if "Comercial - Subdirector" in roles_usuario:
             solicitudesGeneralesFiltradas = [
                 s for s in solicitudesGenerales 
                 if s.get("tipoSolicitud") == "APROBACION_JP"
             ]
-            return {
-                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-                "solicitudesGenerales": solicitudesGeneralesFiltradas
-            }
-        else:
-            return {
-                "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-                "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-            }
+            response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
+        print(response)
+    # Caso 2: Solo Subdirector Comercial (sin JP)
+    elif "Comercial - Subdirector" in roles_usuario:
+        print("# Caso 2: Solo Subdirector Comercial (sin JP)")
+        # Solo mostrar APROBACION_JP (no oportunidades ni programas)
+        solicitudesGeneralesFiltradas = [
+            s for s in solicitudesGenerales 
+            if s.get("tipoSolicitud") == "APROBACION_JP"
+        ]
+        response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
     
-    # Si NO es JP pero es subdirector, filtrar solicitudes generales según el rol
-    if id_usuario in ids_subdirectores:
-        solicitudesGeneralesFiltradas = []
+    # Caso 3: DAF Subdirector (ya emula solicitudes con jugada de IDs)
+    elif "DAF - Subdirector" in roles_usuario:
+        # Incluir oportunidades y programas (con IDs ya modificados)
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
         
-        if "DAF - Subdirector" in roles_usuario:
-            # Solo mostrar APROBACION_COMERCIAL
-            solicitudesGeneralesFiltradas = [
-                s for s in solicitudesGenerales 
-                if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
-            ]
-        elif "Comercial - Subdirector" in roles_usuario:
-            # Solo mostrar APROBACION_JP
-            solicitudesGeneralesFiltradas = [
-                s for s in solicitudesGenerales 
-                if s.get("tipoSolicitud") == "APROBACION_JP"
-            ]
-        else:
-            # Otros subdirectores ven todas las generales
-            solicitudesGeneralesFiltradas = solicitudesGenerales
-        
-        return {"solicitudesGenerales": solicitudesGeneralesFiltradas}
+        # Agregar APROBACION_COMERCIAL
+        solicitudesGeneralesFiltradas = [
+            s for s in solicitudesGenerales 
+            if s.get("tipoSolicitud") == "APROBACION_COMERCIAL"
+        ]
+        response["solicitudesGenerales"] = solicitudesGeneralesFiltradas
     
-    # Caso por defecto: devolver oportunidad/programa 
-    return {
-        "solicitudesPropuestaOportunidad": solicitudesPropuestaOportunidad,
-        "solicitudesPropuestaPrograma": solicitudesPropuestaPrograma,
-    }
+    # Caso 4: DAF Supervisor
+    elif "DAF - Supervisor" in roles_usuario:
+        # Incluir oportunidades y programas
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+    
+    # Caso por defecto: otros roles
+    else:
+        response["solicitudesPropuestaOportunidad"] = solicitudesPropuestaOportunidad
+        response["solicitudesPropuestaPrograma"] = solicitudesPropuestaPrograma
+    
+    return response
 
 
 def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Session, solicitudes):
@@ -214,24 +260,72 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
         mes_anterior = mes_conciliacion.month - 1
         anio_anterior = mes_conciliacion.year
     
-    # Obtener dinámicamente IDs de DAF y Subdirectores
-    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
-        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
-    ).all()
-    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    # Obtener el usuario y sus roles
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    roles_usuario = set()
+    if usuario and usuario.roles:
+        roles_usuario = {rol.nombre for rol in usuario.roles}
     
-    if id_usuario in ids_no_filtrar:
+    # Obtener dinámicamente IDs de DAF (acceso total)
+    usuarios_acceso_total = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector"])
+    ).all()
+    ids_acceso_total = {u.id for u in usuarios_acceso_total}
+    
+    if id_usuario in ids_acceso_total:
+        # DAF: acceso a todos los programas
         programas = db.query(Programa).filter(
             Programa.idPropuesta == id_propuesta
         ).all()
+    elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+        # Usuario con rol de Subdirector y/o Jefe de Producto
+        from sqlalchemy import or_
+        
+        # Caso especial: JP + Subdirector Comercial con lógica de "cambio de etapa"
+        if "Comercial - Jefe de producto" in roles_usuario and "Comercial - Subdirector" in roles_usuario:
+            # Obtener el estado de verBotonAprobacionBloqueadoSubComercial para determinar la etapa
+            solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+            esta_en_etapa_subdirector = any(not s["abierta"] for s in solicitudes_aprobacion)
+            
+            if esta_en_etapa_subdirector:
+                # Etapa Subdirector: solo programas donde es subdirector
+                programas = db.query(Programa).filter(
+                    Programa.idSubdirector == id_usuario,
+                    Programa.idPropuesta == id_propuesta
+                ).all()
+            else:
+                # Etapa JP: solo programas donde es jefe de producto
+                programas = db.query(Programa).filter(
+                    Programa.idJefeProducto == id_usuario,
+                    Programa.idPropuesta == id_propuesta
+                ).all()
+        else:
+            # Usuario con un solo rol o sin lógica de cambio de etapa
+            condiciones = []
+            
+            # Si es Subdirector Comercial, agregar programas donde es subdirector
+            if "Comercial - Subdirector" in roles_usuario:
+                condiciones.append(Programa.idSubdirector == id_usuario)
+            
+            # Si es Jefe de Producto, agregar programas donde es jefe de producto
+            if "Comercial - Jefe de producto" in roles_usuario:
+                condiciones.append(Programa.idJefeProducto == id_usuario)
+            
+            # Combinar condiciones con OR para obtener programas de ambos roles
+            programas = db.query(Programa).filter(
+                Programa.idPropuesta == id_propuesta,
+                or_(*condiciones)
+            ).all()
     else:
-        programas = db.query(Programa).filter(
-            Programa.idJefeProducto == id_usuario,
-            Programa.idPropuesta == id_propuesta
-        ).all()
+        # Otros usuarios: sin acceso a programas
+        programas = []
     programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
-    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
-    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
+    oportunidades_all = db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == id_propuesta, 
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
+        Oportunidad.eliminado == False  # Excluir oportunidades eliminadas
+    ).all()
     oportunidades_por_programa = {}
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
@@ -294,7 +388,7 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
             "metaDeAlumnos": p.metaDeAlumnos,
             "oportunidad_total_count": count_opty,
             "atipico": bool(atipico),
-            "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
+            "enRiesgo": bool(p.enRiesgo),
             "noAperturar": bool(p.noAperturar),
             "comentario": p.comentario,
             "fechaEditada": bool(p.id in programas_fecha_editada)
@@ -320,14 +414,24 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
     total_monto = 0
     total_oportunidades = 0
     
-    # Obtener dinámicamente IDs de DAF y Subdirectores
-    usuarios_no_filtrar = db.query(Usuario).join(Usuario.roles).filter(
-        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector", "Comercial - Subdirector"])
-    ).all()
-    ids_no_filtrar = {u.id for u in usuarios_no_filtrar}
+    # Obtener el usuario y sus roles
+    usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
+    roles_usuario = set()
+    if usuario and usuario.roles:
+        roles_usuario = {rol.nombre for rol in usuario.roles}
     
-    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"]
-    oportunidades_all = db.query(Oportunidad).filter(Oportunidad.idPropuesta == id_propuesta, Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir)).all()
+    # Obtener dinámicamente IDs de DAF (acceso total)
+    usuarios_acceso_total = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.nombre.in_(["DAF - Supervisor", "DAF - Subdirector"])
+    ).all()
+    ids_acceso_total = {u.id for u in usuarios_acceso_total}
+    
+    etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
+    oportunidades_all = db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == id_propuesta, 
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
+        Oportunidad.eliminado == False  # Excluir oportunidades eliminadas
+    ).all()
     oportunidades_por_programa = {}
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
@@ -360,15 +464,53 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
         while mes <= 0:
             mes += 12
             anio -= 1
-        if id_usuario in ids_no_filtrar:
+        if id_usuario in ids_acceso_total:
+            # DAF: acceso a todos los programas
             programas = db.query(Programa).filter(
                 Programa.idPropuesta == id_propuesta
             ).all()
+        elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+            # Usuario con rol de Subdirector y/o Jefe de Producto
+            from sqlalchemy import or_
+            
+            # Caso especial: JP + Subdirector Comercial con lógica de "cambio de etapa"
+            if "Comercial - Jefe de producto" in roles_usuario and "Comercial - Subdirector" in roles_usuario:
+                # Obtener el estado de verBotonAprobacionBloqueadoSubComercial para determinar la etapa
+                solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+                esta_en_etapa_subdirector = any(not s["abierta"] for s in solicitudes_aprobacion)
+                
+                if esta_en_etapa_subdirector:
+                    # Etapa Subdirector: solo programas donde es subdirector
+                    programas = db.query(Programa).filter(
+                        Programa.idSubdirector == id_usuario,
+                        Programa.idPropuesta == id_propuesta
+                    ).all()
+                else:
+                    # Etapa JP: solo programas donde es jefe de producto
+                    programas = db.query(Programa).filter(
+                        Programa.idJefeProducto == id_usuario,
+                        Programa.idPropuesta == id_propuesta
+                    ).all()
+            else:
+                # Usuario con un solo rol o sin lógica de cambio de etapa
+                condiciones = []
+                
+                # Si es Subdirector Comercial, agregar programas donde es subdirector
+                if "Comercial - Subdirector" in roles_usuario:
+                    condiciones.append(Programa.idSubdirector == id_usuario)
+                
+                # Si es Jefe de Producto, agregar programas donde es jefe de producto
+                if "Comercial - Jefe de producto" in roles_usuario:
+                    condiciones.append(Programa.idJefeProducto == id_usuario)
+                
+                # Combinar condiciones con OR para obtener programas de ambos roles
+                programas = db.query(Programa).filter(
+                    Programa.idPropuesta == id_propuesta,
+                    or_(*condiciones)
+                ).all()
         else:
-            programas = db.query(Programa).filter(
-                Programa.idJefeProducto == id_usuario,
-                Programa.idPropuesta == id_propuesta
-            ).all()
+            # Otros usuarios: sin acceso a programas
+            programas = []
         programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes and p.fechaInaguracionPropuesta.year == anio]
         for p in programas_filtrados:
             # Excluir programas con noAperturar = True
@@ -403,7 +545,7 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
                 "oportunidad_total_monto_propuesto": monto_opty,
                 "oportunidad_total_count": count_opty,
                 "atipico": atipico,
-                "enRiesgo": bool(count_opty < p.puntoMinimoApertura),
+                "enRiesgo": bool(p.enRiesgo),
                 "comentario": p.comentario,
                 "fechaEditada": bool(p.id in programas_fecha_editada)
             })
@@ -434,16 +576,19 @@ def obtener_informacion_preconciliacion(
     propuesta = db.query(Propuesta).get(id_propuesta)
     estado_generada = False
     estado_propuesta_nombre = ""
+    estado_preconciliada = False
+    estado_conciliada = False
     if propuesta and propuesta.estadoPropuesta and propuesta.estadoPropuesta.nombre:
         estado_propuesta_nombre = propuesta.estadoPropuesta.nombre.strip().upper()
         estado_generada = estado_propuesta_nombre == "GENERADA"
         estado_preconciliada = estado_propuesta_nombre == "PRECONCILIADA"
+        estado_conciliada = estado_propuesta_nombre == "CONCILIADA"
 
-    # Obtener rol del usuario (cada usuario tiene máximo un rol)
+    # Obtener TODOS los roles del usuario
     usuario = db.query(Usuario).filter(Usuario.id == id_usuario).first()
-    rol_usuario = None
+    roles_usuario = set()
     if usuario and usuario.roles:
-        rol_usuario = usuario.roles[0].nombre if len(usuario.roles) > 0 else None
+        roles_usuario = {rol.nombre for rol in usuario.roles}
     
     response = {
         # "carteras": carteras,
@@ -452,24 +597,65 @@ def obtener_informacion_preconciliacion(
     }
     if not estado_generada:
         response["solicitudes"] = solicitudes  
-    # verBotonPreconciliacion: Solo DAF Supervisor o DAF Subdirector cuando estado == GENERADA
-    if rol_usuario in ["DAF - Supervisor", "DAF - Subdirector"] and estado_generada:
+    # === BOTONES DAF ===
+    es_daf = any(rol in roles_usuario for rol in ["DAF - Supervisor", "DAF - Subdirector"])
+    
+    if es_daf and estado_generada:
         response["verBotonPreconciliacion"] = True
     
-    # verBotonAprobacionSubComercial: Solo Jefes de Producto
-    if rol_usuario == "Comercial - Jefe de producto":
+    if es_daf and estado_preconciliada:
+        response["noEditarBotonSolicitarCambio"] = True
+    
+    # === BOTONES JEFE DE PRODUCTO ===
+    if "Comercial - Jefe de producto" in roles_usuario:
         response["verBotonAprobacionSubComercial"] = True
-        
-        # verBotonAprobacionFinalizar: JP con todas sus solicitudes ACEPTADAS (o sin solicitudes)
-        solicitudes_jp = solicitudes.get("solicitudesPropuestaOportunidad", []) + solicitudes.get("solicitudesPropuestaPrograma", [])
-        if not solicitudes_jp or all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
+        solicitudes_jp = response.get("solicitudes",[]).get("solicitudesPropuestaOportunidad", []) + response.get("solicitudes",[]).get("solicitudesPropuestaPrograma", [])
+        if all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_jp):
             response["verBotonAprobacionFinalizar"] = True
         
-        # verBotonAprobacionBloqueadoSubComercial: Si existe una solicitud APROBACION_JP cerrada (abierta=False)
         solicitudes_aprobacion = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
-        if any(not s["abierta"] for s in solicitudes_aprobacion):
+        # Para JP: solo considerar solicitudes donde él es el GENERADOR (las que envió)
+        solicitudes_jp_generadas = [s for s in solicitudes_aprobacion if s["idUsuarioGenerador"] == id_usuario]
+        if solicitudes_jp_generadas and all(not s["abierta"] for s in solicitudes_jp_generadas):
             response["verBotonAprobacionBloqueadoSubComercial"] = True
-    if (rol_usuario == "DAF - Supervisor" or rol_usuario == "DAF - Subdirector") and estado_preconciliada:
-        response["noEditarBotonSolicitarCambio"] = True
+    
+    # === BOTONES SUBDIRECTOR COMERCIAL ===
+    if "Comercial - Subdirector" in roles_usuario:
+        solicitudes_aprobacion_jp = obtener_solicitudes_aprobacion_jp(id_usuario, id_propuesta, db)
+        solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
+        
+        if estado_preconciliada:
+            response["verBotonSolicitarSubdirectorDaf"] = True
+        
+        bloquear_boton = False
+        if solicitudes_aprobacion_jp:
+            todas_jp_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_jp)
+            if not todas_jp_aceptadas:
+                bloquear_boton = True
+        
+        if solicitudes_aprobacion_comercial:
+            alguna_comercial_cerrada = any(not s["abierta"] for s in solicitudes_aprobacion_comercial)
+            if alguna_comercial_cerrada:
+                bloquear_boton = True
+        
+        response["noEditarBotonSolicitarSubdirectorDaf"] = bloquear_boton
+    
+    # === BOTONES DAF SUBDIRECTOR ===
+    if "DAF - Subdirector" in roles_usuario:
+        solicitudes_aprobacion_comercial = obtener_solicitudes_aprobacion_comercial(id_usuario, id_propuesta, db)
+        
+        if estado_preconciliada:
+            response["verBotonConciliar"] = True
+        
+        if solicitudes_aprobacion_comercial:
+            todas_comerciales_aceptadas = all(s.get("valorSolicitud") == "ACEPTADO" for s in solicitudes_aprobacion_comercial)
+            response["noEditarBotonConciliar"] = not todas_comerciales_aceptadas
+        else:
+            response["noEditarBotonConciliar"] = False
+    
+    # === ESTADO CONCILIADA - BLOQUEAR TODO ===
+    if estado_conciliada:
+        response["noVerBotones"] = True
+        response["noEditarNada"] = True
         
     return response

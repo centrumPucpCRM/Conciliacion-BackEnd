@@ -15,8 +15,12 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from ..utils.solicitudes_crear import crear_solicitud_alumno, crear_solicitud_programa, crear_solicitud_fecha, crear_solicitud_ELIMINACION_POSIBLE_BECADO
-from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada, aceptar_rechazar_ELIMINACION_POSIBLE_BECADO
+from ..utils.solicitudes_editar import aceptar_rechazar_solicitud_basico,aceptar_rechazar_edicion_alumno, aceptar_rechazar_fecha_cambiada, aceptar_rechazar_ELIMINACION_POSIBLE_BECADO, obtener_resumen_log_por_tipo
 from ..utils.solicitudes_flujo import aceptar_rechazar_solicitud_subdirectores
+from ..models.log import Log
+from ..models.programa import Programa
+from ..models.usuario import Usuario
+
 
 router = APIRouter(prefix="/solicitudes", tags=["Solicitud"])
 # Endpoint generico para crear solicitudes de alumno o programa
@@ -268,6 +272,53 @@ def abrir_solicitudes_aprobacion_jp(
 		"idPropuesta": id_propuesta
 	}
 
+@router.patch("/abrir-solicitudes-aprobacion-comercial")
+def abrir_solicitudes_aprobacion_comercial(
+	body: dict = Body(
+		...,
+		example={
+			"idUsuario": 4,
+			"idPropuesta": 1
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Abre todas las solicitudes de tipo APROBACION_COMERCIAL para un usuario y propuesta.
+	Pone abierta=False en todas las solicitudes APROBACION_COMERCIAL del usuario.
+	"""
+	id_usuario = body.get("idUsuario")
+	id_propuesta = body.get("idPropuesta")
+	
+	if not id_usuario or not id_propuesta:
+		return {"error": "Se requieren idUsuario e idPropuesta"}
+	
+	# Buscar todas las solicitudes APROBACION_COMERCIAL del usuario para la propuesta
+	solicitudes = db.query(SolicitudModel).filter(
+		SolicitudModel.idUsuarioGenerador == id_usuario,
+		SolicitudModel.idPropuesta == id_propuesta
+	).all()
+	
+	solicitudes_actualizadas = []
+	for solicitud in solicitudes:
+		if solicitud.tipoSolicitud and solicitud.tipoSolicitud.nombre == "APROBACION_COMERCIAL":
+			# Si el generador y receptor son el mismo, aprobar automáticamente
+			if solicitud.idUsuarioGenerador == solicitud.idUsuarioReceptor:
+				valor_aceptado = db.query(ValorSolicitud).filter_by(nombre="ACEPTADO").first()
+				if valor_aceptado:
+					solicitud.valorSolicitud_id = valor_aceptado.id
+			solicitud.abierta = False
+			solicitudes_actualizadas.append(solicitud.id)
+	
+	db.commit()
+	
+	return {
+		"msg": f"Se cerraron {len(solicitudes_actualizadas)} solicitudes de tipo APROBACION_COMERCIAL",
+		"solicitudesCerradas": solicitudes_actualizadas,
+		"idUsuario": id_usuario,
+		"idPropuesta": id_propuesta
+	}
+
 @router.patch("/solicitudesSubdirectores")
 def editar_solicitud_subdirectores(
 	body: dict = Body(
@@ -310,3 +361,179 @@ def editar_solicitud_subdirectores(
 		return {"error": "Este endpoint solo maneja solicitudes de tipo APROBACION_JP y APROBACION_COMERCIAL"}
 	
 	return aceptar_rechazar_solicitud_subdirectores(body, db, solicitud)
+
+@router.get("/debug-logs/{id_solicitud}")
+def debug_logs_solicitud(
+	id_solicitud: int,
+	db: Session = Depends(get_db)
+):
+	"""
+	Endpoint temporal para debuggear los logs de una solicitud
+	"""
+	logs = db.query(Log).filter_by(idSolicitud=id_solicitud).all()
+	return {
+		"total_logs": len(logs),
+		"logs": [
+			{
+				"id": log.id,
+				"created": str(log.creadoEn),
+				"auditoria": log.auditoria
+			} for log in logs
+		]
+	}
+
+@router.post("/reparar-logs/{id_solicitud}")
+def reparar_logs_solicitud(
+	id_solicitud: int,
+	db: Session = Depends(get_db)
+):
+	"""
+	Endpoint temporal para reparar logs que no tienen nombres de usuarios
+	"""
+	logs = db.query(Log).filter_by(idSolicitud=id_solicitud).all()
+	logs_reparados = 0
+	
+	for log in logs:
+		auditoria = log.auditoria or {}
+		
+		# Si no tiene nombres de usuarios, agregarlos
+		if not auditoria.get('nombreUsuarioGenerador') or not auditoria.get('nombreUsuarioReceptor'):
+			# Obtener IDs de usuarios de la auditoria
+			id_generador = auditoria.get('idUsuarioGenerador')
+			id_receptor = auditoria.get('idUsuarioReceptor')
+			
+			if id_generador:
+				usuario_generador = db.query(Usuario).filter_by(id=id_generador).first()
+				if usuario_generador:
+					auditoria['nombreUsuarioGenerador'] = usuario_generador.nombre
+			
+			if id_receptor:
+				usuario_receptor = db.query(Usuario).filter_by(id=id_receptor).first()
+				if usuario_receptor:
+					auditoria['nombreUsuarioReceptor'] = usuario_receptor.nombre
+			
+			# Actualizar el log
+			log.auditoria = auditoria
+			logs_reparados += 1
+	
+	db.commit()
+	return {
+		"msg": f"Se repararon {logs_reparados} logs",
+		"total_logs": len(logs),
+		"logs_reparados": logs_reparados
+	}
+
+@router.get("/detalle/{id_solicitud}")
+def obtener_detalle_solicitud_con_logs(
+	id_solicitud: int,
+	db: Session = Depends(get_db)
+):
+	"""
+	Obtiene el detalle completo de una solicitud con toda su información explotada y sus logs.
+	
+	Args:
+		id_solicitud: ID de la solicitud a consultar
+		
+	Returns:
+		dict: Información completa de la solicitud y sus logs procesados
+	"""
+	# Buscar la solicitud
+	solicitud = db.query(SolicitudModel).filter_by(id=id_solicitud).first()
+	if not solicitud:
+		return {"error": "Solicitud no encontrada"}
+	
+	# Obtener información de usuarios
+	usuario_generador = db.query(Usuario).filter_by(id=solicitud.idUsuarioGenerador).first()
+	usuario_receptor = db.query(Usuario).filter_by(id=solicitud.idUsuarioReceptor).first()
+	
+	# Información base de la solicitud
+	detalle_solicitud = {
+		"id": solicitud.id,
+		"tipoSolicitud": solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else None,
+		"valorSolicitud": solicitud.valorSolicitud.nombre if solicitud.valorSolicitud else None,
+		"abierta": solicitud.abierta,
+		"invertido": getattr(solicitud, 'invertido', False),
+		"comentario": solicitud.comentario,
+		"creadoEn": solicitud.creadoEn.strftime('%Y-%m-%d %H:%M:%S') if solicitud.creadoEn else None,
+		"idPropuesta": solicitud.idPropuesta,
+		"usuarioGenerador": {
+			"id": solicitud.idUsuarioGenerador,
+			"nombre": usuario_generador.nombre if usuario_generador else None
+		},
+		"usuarioReceptor": {
+			"id": solicitud.idUsuarioReceptor,
+			"nombre": usuario_receptor.nombre if usuario_receptor else None
+		}
+	}
+	
+	# Obtener información específica según el tipo de solicitud
+	tipo_solicitud = solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else None
+	informacion_especifica = {}
+	
+	if tipo_solicitud in ["EXCLUSION_PROGRAMA", "FECHA_CAMBIADA"]:
+		sxp = db.query(SolicitudXPrograma).filter_by(idSolicitud=solicitud.id).first()
+		if sxp:
+			programa = db.query(Programa).filter_by(id=sxp.idPrograma).first()
+			informacion_especifica = {
+				"programa": {
+					"id": sxp.idPrograma,
+					"nombre": programa.nombre if programa else None,
+					"noAperturar": programa.noAperturar if programa else None,
+					"noCalcular": programa.noCalcular if programa else None,
+					"fechaInaguracionPropuesta": str(sxp.fechaInaguracionPropuesta) if sxp.fechaInaguracionPropuesta else None,
+					"fechaInaguracionObjetada": str(sxp.fechaInaguracionObjetada) if sxp.fechaInaguracionObjetada else None
+				}
+			}
+	
+	elif tipo_solicitud in ["AGREGAR_ALUMNO", "EDICION_ALUMNO", "ELIMINACION_POSIBLE_BECADO"]:
+		sxo = db.query(SolicitudXOportunidad).filter_by(idSolicitud=solicitud.id).first()
+		if sxo:
+			oportunidad = db.query(Oportunidad).filter_by(id=sxo.idOportunidad).first()
+			informacion_especifica = {
+				"oportunidad": {
+					"id": sxo.idOportunidad,
+					"montoPropuesto": sxo.montoPropuesto,
+					"montoObjetado": sxo.montoObjetado,
+					"etapaVentaPropuesta": oportunidad.etapaVentaPropuesta if oportunidad else None,
+					"eliminado": oportunidad.eliminado if oportunidad else None,
+					"descuentoPropuesto": oportunidad.descuentoPropuesto if oportunidad else None
+				}
+			}
+	
+	# Obtener todos los logs de la solicitud ordenados por fecha (más antiguo primero)
+	logs = db.query(Log).filter_by(idSolicitud=id_solicitud).order_by(Log.creadoEn.asc()).all()
+	
+	# Procesar logs usando la función helper
+	logs_procesados = []
+	for log in logs:
+		try:
+			resumen_log = obtener_resumen_log_por_tipo(log)
+			logs_procesados.append(resumen_log)
+		except Exception as e:
+			# En caso de error procesando un log, incluir información básica
+			logs_procesados.append({
+				"id": log.id,
+				"fecha": log.creadoEn.strftime('%Y-%m-%d %H:%M:%S') if log.creadoEn else None,
+				"error": f"Error procesando log: {str(e)}",
+				"auditoria_raw": log.auditoria
+			})
+	
+	# Estadísticas de la solicitud
+	estadisticas = {
+		"totalLogs": len(logs),
+		"logsAceptados": len([l for l in logs if l.auditoria.get('valorSolicitud') == 'ACEPTADO']),
+		"logsRechazados": len([l for l in logs if l.auditoria.get('valorSolicitud') == 'RECHAZADO']),
+		"ultimaActividad": logs[0].creadoEn.strftime('%Y-%m-%d %H:%M:%S') if logs else None
+	}
+	
+	return {
+		"solicitud": detalle_solicitud,
+		"informacionEspecifica": informacion_especifica,
+		"logs": logs_procesados,
+		"estadisticas": estadisticas,
+		"resumen": {
+			"estado": "Abierta" if solicitud.abierta else "Cerrada",
+			"tipoFlujo": "Ping-pong" if getattr(solicitud, 'invertido', False) else "Normal",
+			"ultimaAccion": logs_procesados[0].get('accion') if logs_procesados else "Sin actividad"
+		}
+	}
