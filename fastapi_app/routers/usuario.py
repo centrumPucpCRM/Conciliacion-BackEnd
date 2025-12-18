@@ -463,11 +463,12 @@ async def listar_usuarios_completo(
                                 if buscar.lower() not in email.lower() and buscar.lower() not in nombre.lower():
                                     continue
                             
+                            google_user_id = gu.get('id', '')
                             usuarios_google_externos.append({
-                                "idUsuario": None,
+                                "idUsuario": google_user_id,  # Usar el ID del servicio auth-google
                                 "nombre": gu.get("name", email.split("@")[0]),
                                 "correo": email,
-                                "documentoIdentidad": f"GOOGLE_{gu.get('id', '')}",
+                                "documentoIdentidad": f"GOOGLE_{google_user_id}",
                                 "activo": False,  # No están en BD local
                                 "tipo": "google",
                                 "permisos": [],
@@ -516,6 +517,105 @@ async def listar_usuarios_completo(
     except Exception as e:
         logger.error(f"Error al listar usuarios completo: {str(e)}")
         raise HTTPException(status_code=500, detail="Error al obtener la lista completa de usuarios")
+
+
+@router.get("/clave_crm")
+def listar_claves_crm(db: Session = Depends(get_db)):
+    """
+    Lista todas las claves CRM únicas de la tabla usuario.
+    Retorna solo las claves que no son NULL o vacías.
+    """
+    try:
+        # Obtener todas las claves únicas que no sean NULL
+        claves = db.query(Usuario.clave).filter(
+            Usuario.clave.isnot(None),
+            Usuario.clave != ""
+        ).distinct().all()
+        
+        # Convertir a lista simple
+        claves_list = [clave[0] for clave in claves if clave[0]]
+        
+        logger.info(f"Claves CRM encontradas: {len(claves_list)}")
+        
+        return {
+            "claves": sorted(claves_list),  # Ordenadas alfabéticamente
+            "total": len(claves_list)
+        }
+    except Exception as e:
+        logger.error(f"Error al listar claves CRM: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error al obtener las claves CRM")
+
+
+@router.put("/google/{user_id}/asignar-clave")
+async def asignar_clave_crm_google(
+    user_id: str,
+    data: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Asigna una clave CRM a un usuario de Google en el servicio auth-google.
+    Este endpoint actúa como proxy y añade la autenticación necesaria.
+    
+    Args:
+        user_id: ID del usuario en el servicio auth-google
+        data: {"clave": "clave_crm_a_asignar"}
+    """
+    import os
+    clave = data.get("clave")
+    
+    if not clave:
+        raise HTTPException(status_code=400, detail="Clave requerida")
+    
+    # Obtener API key de variable de entorno
+    service_api_key = os.getenv("AUTH_SERVICE_API_KEY", "change-this-to-a-secure-random-key-in-production")
+    
+    try:
+        logger.info(f"Asignando clave '{clave}' al usuario Google ID: {user_id}")
+        
+        # Llamar al servicio de Google con la estructura correcta y autenticación
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                f"{GOOGLE_AUTH_SERVICE_URL}/auth/users/{user_id}/key_crm",
+                json={"key_crm": clave},
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Service-Key": service_api_key
+                },
+                timeout=10.0
+            )
+            
+            logger.info(f"Response status: {response.status_code}")
+            
+            if response.status_code != 200:
+                error_detail = response.json().get("detail", "Error desconocido") if response.text else "Error al comunicarse con el servicio"
+                logger.error(f"Error del servicio auth-google: {error_detail}")
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Error del servicio de autenticación: {error_detail}"
+                )
+            
+            result = response.json()
+            logger.info(f"Clave asignada exitosamente: {result}")
+            
+            return {
+                "message": "Clave CRM asignada exitosamente",
+                "user_id": user_id,
+                "key_crm": clave,
+                "user_data": result
+            }
+            
+    except httpx.RequestError as e:
+        logger.error(f"Error de conexión con el servicio de Google: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de autenticación de Google no disponible"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error al asignar clave CRM: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
+
 
 
 

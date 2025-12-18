@@ -16,6 +16,7 @@ class UsuarioMarketing(Base):
     id_usuario = Column(Integer, ForeignKey('usuario.id'), nullable=True, index=True)
     dias_pendientes = Column(JSON, nullable=True)
     periodos = Column(JSON, nullable=True)
+    vacaciones_extras = Column(JSON, nullable=True)  # Vacaciones extras organizadas por tipo: {'medico': [...], 'otros': [...]}
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
     

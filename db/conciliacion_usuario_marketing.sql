@@ -1,5 +1,6 @@
 -- Tabla: usuario_marketing
 -- Descripción: Almacena información de usuarios del área de marketing con gestión de vacaciones
+-- Incluye gestión de periodos de vacaciones y vacaciones extras con estados y observaciones
 
 CREATE TABLE IF NOT EXISTS `usuario_marketing` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
@@ -10,7 +11,8 @@ CREATE TABLE IF NOT EXISTS `usuario_marketing` (
   `vacaciones` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '0 = no está de vacaciones, 1 = está de vacaciones',
   `id_usuario` INT NULL COMMENT 'ID del usuario relacionado (opcional)',
   `dias_pendientes` JSON NULL COMMENT 'Días pendientes por año. Ejemplo: {"2025": 66, "2026": 93}',
-  `periodos` JSON NULL COMMENT 'Periodos de vacaciones. Ejemplo: [{"inicio": "2025-01-15", "fin": "2025-01-20"}]',
+  `periodos` JSON NULL COMMENT 'Periodos de vacaciones con estado y observación. Ejemplo: [{"inicio": "2025-01-15", "fin": "2025-01-20", "estado": "activo", "observacion": "sin observaciones"}]',
+  `vacaciones_extras` JSON NULL COMMENT 'Vacaciones extras organizadas por tipo. Ejemplo: {"medico": [{"inicio": "2025-02-01", "fin": "2025-02-03", "estado": "activo", "observacion": "sin observaciones"}], "otros": []}',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX `idx_party_id` (`party_id`),
@@ -23,3 +25,11 @@ CREATE TABLE IF NOT EXISTS `usuario_marketing` (
 -- Comentarios adicionales sobre la tabla
 -- Esta tabla es independiente pero puede relacionarse opcionalmente con la tabla 'usuario' mediante 'id_usuario'
 -- Los campos JSON permiten flexibilidad en la estructura de días pendientes y periodos de vacaciones
+--
+-- Estructura de periodos:
+-- Cada periodo debe incluir: inicio (YYYY-MM-DD), fin (YYYY-MM-DD), estado (planificado|activo|finalizado|cancelado), observacion (texto)
+-- Los estados se calculan automáticamente según las fechas, excepto cuando se marca como cancelado
+--
+-- Estructura de vacaciones_extras:
+-- Organizadas por tipo: "medico" y "otros"
+-- Cada vacación extra sigue la misma estructura que los periodos: inicio, fin, estado, observacion
