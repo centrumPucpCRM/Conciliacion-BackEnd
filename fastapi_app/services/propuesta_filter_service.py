@@ -17,8 +17,8 @@ class PropuestaFilterService:
     """Service for handling propuesta state filtering logic"""
     
     # Constants for excluded states by default (using names instead of IDs)
-    EXCLUDED_STATES_BY_DEFAULT = ["CONCILIADA", "CANCELADA"]
-    
+    EXCLUDED_STATES_BY_DEFAULT = ["CONCILIADA", "CANCELADA", "PROYECTADA"]
+
     # LOV (List of Values) for all available states
     ESTADO_LOV = {
         "PROGRAMADA": 1,
@@ -26,7 +26,8 @@ class PropuestaFilterService:
         "PRECONCILIADA": 3,
         "APROBADA": 4,
         "CONCILIADA": 5,
-        "CANCELADA": 6
+        "CANCELADA": 6,
+        "PROYECTADA": 7
     }
     
     @classmethod

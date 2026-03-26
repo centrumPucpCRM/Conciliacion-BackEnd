@@ -47,12 +47,12 @@ def obtener_estados_conciliaciones(db: Session = Depends(get_db)):
     Obtiene el conteo de propuestas para la vista de Conciliaciones.
     Returns:
         - conciliadas: conteo de propuestas en estado CONCILIADA
-        - proyectadas: conteo de propuestas en estado PRECONCILIADA
+        - proyectadas: conteo de propuestas en estado PROYECTADA
         - canceladas: conteo de propuestas en estado CANCELADA
     """
     from ..models.propuesta import EstadoPropuesta as EstadoPropuestaModel
     conciliadas = db.query(Propuesta).join(EstadoPropuestaModel).filter(EstadoPropuestaModel.nombre == "CONCILIADA").count()
-    proyectadas = db.query(Propuesta).join(EstadoPropuestaModel).filter(EstadoPropuestaModel.nombre == "PRECONCILIADA").count()
+    proyectadas = db.query(Propuesta).join(EstadoPropuestaModel).filter(EstadoPropuestaModel.nombre == "PROYECTADA").count()
     canceladas = db.query(Propuesta).join(EstadoPropuestaModel).filter(EstadoPropuestaModel.nombre == "CANCELADA").count()
     return {"conciliadas": conciliadas, "proyectadas": proyectadas, "canceladas": canceladas}
 

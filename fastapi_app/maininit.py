@@ -32,7 +32,7 @@ def seed_lovs():
         # Propuesta: tipoDePropuesta y estadoPropuesta
         from .models.propuesta import TipoDePropuesta, EstadoPropuesta
         tipo_propuesta_lovs = ["CREACION", "MODIFICACION"]
-        estado_propuesta_lovs = ["PROGRAMADA", "GENERADA", "PRECONCILIADA", "CONCILIADA", "CANCELADA"]
+        estado_propuesta_lovs = ["PROGRAMADA", "GENERADA", "PRECONCILIADA", "CONCILIADA", "CANCELADA", "PROYECTADA"]
         existentes_tipo_p = {t.nombre for t in db.query(TipoDePropuesta).all()}
         for nombre in tipo_propuesta_lovs:
             if nombre not in existentes_tipo_p:
