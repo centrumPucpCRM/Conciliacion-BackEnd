@@ -1,7 +1,8 @@
+import os
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = "mysql+pymysql://root:HeliuYjbfOJCYjyKhXWaOVKyZmCpAPrQ@crossover.proxy.rlwy.net:15290/railway"
+DATABASE_URL = os.environ.get("MYSQL_URL") or os.environ.get("DATABASE_URL") or "mysql://root:MpkNnooeopanrfteJGMETSfyNUBslzFt@interchange.proxy.rlwy.net:59309/railway"
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
