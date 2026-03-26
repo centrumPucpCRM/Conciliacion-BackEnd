@@ -22,20 +22,48 @@ router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
 @router.get("/{propuesta_id}/programas-conciliacion")
 def obtener_programas_conciliacion(
     propuesta_id: int,
+    user_id: Optional[int] = Query(None, description="ID del usuario para filtrar programas por rol"),
     db: Session = Depends(get_db),
 ):
     """
-    Obtiene TODOS los programas de una propuesta sin filtro de meses.
-    Para la vista de detalle de Conciliaciones.
+    Obtiene los programas de una propuesta para la vista de detalle de Conciliaciones.
+    Si se envía user_id, filtra según el rol del usuario:
+    - DAF: ve todos los programas
+    - JP: solo programas donde es idJefeProducto
+    - Subdirector Comercial: solo programas donde es idSubdirector
     """
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     if not propuesta:
         raise HTTPException(status_code=404, detail="Propuesta no encontrada")
 
-    # Todos los programas de la propuesta (incluye noAperturar)
-    programas = db.query(ProgramaModel).filter(
-        ProgramaModel.idPropuesta == propuesta_id
-    ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
+    # Filtrar programas según rol del usuario
+    if user_id:
+        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+        roles_usuario = {rol.nombre for rol in usuario.roles} if usuario and usuario.roles else set()
+
+        roles_daf = {"DAF - Supervisor", "DAF - Subdirector", "DAF - Admin"}
+        if roles_usuario & roles_daf:
+            # DAF: acceso a todos los programas
+            programas = db.query(ProgramaModel).filter(
+                ProgramaModel.idPropuesta == propuesta_id
+            ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
+        elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+            condiciones = []
+            if "Comercial - Jefe de producto" in roles_usuario:
+                condiciones.append(ProgramaModel.idJefeProducto == user_id)
+            if "Comercial - Subdirector" in roles_usuario:
+                condiciones.append(ProgramaModel.idSubdirector == user_id)
+            programas = db.query(ProgramaModel).filter(
+                ProgramaModel.idPropuesta == propuesta_id,
+                or_(*condiciones)
+            ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
+        else:
+            programas = []
+    else:
+        # Sin user_id: todos los programas (backwards compatible)
+        programas = db.query(ProgramaModel).filter(
+            ProgramaModel.idPropuesta == propuesta_id
+        ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
 
     # Excluir oportunidades eliminadas y en etapas no válidas
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
