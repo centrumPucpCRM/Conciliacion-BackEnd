@@ -12,9 +12,95 @@ from ..models.usuario import Usuario
 from ..models.rol_permiso import Rol
 from ..schemas.propuesta import PropuestaListadoPage
 from ..services.propuesta_filter_service import PropuestaFilterService
+from ..models.programa import Programa as ProgramaModel
+from ..models.oportunidad import Oportunidad
 from datetime import datetime
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
+
+
+@router.get("/{propuesta_id}/programas-conciliacion")
+def obtener_programas_conciliacion(
+    propuesta_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Obtiene TODOS los programas de una propuesta sin filtro de meses.
+    Para la vista de detalle de Conciliaciones.
+    """
+    propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    # Todos los programas de la propuesta (incluye noAperturar)
+    programas = db.query(ProgramaModel).filter(
+        ProgramaModel.idPropuesta == propuesta_id
+    ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
+
+    # Excluir oportunidades eliminadas y en etapas no válidas
+    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
+    oportunidades_all = db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == propuesta_id,
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
+        Oportunidad.eliminado == False
+    ).all()
+
+    oportunidades_por_programa = {}
+    for o in oportunidades_all:
+        oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
+
+    items = []
+    for p in programas:
+        oportunidades = oportunidades_por_programa.get(p.id, [])
+        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
+        count_opty = len(oportunidades)
+
+        # Datos de alumnos/oportunidades con info de edición
+        alumnos = []
+        for o in oportunidades:
+            monto_editado = o.montoPropuesto != o.monto if o.monto else False
+            alumnos.append({
+                "id": o.id,
+                "nombre": o.nombre,
+                "descuento": o.descuento,
+                "monto": o.monto,
+                "montoPropuesto": o.montoPropuesto,
+                "montoEditado": bool(monto_editado),
+                "moneda": o.moneda,
+                "etapaVentaPropuesta": o.etapaVentaPropuesta,
+                "becado": bool(o.becado),
+                "posibleAtipico": bool(o.posibleAtipico),
+            })
+
+        items.append({
+            "id": p.id,
+            "codigo": p.codigo,
+            "nombre": p.nombre,
+            "subdireccion": p.subdireccion,
+            "cartera": p.cartera,
+            "mes": p.mes,
+            "fechaDeInaguracion": p.fechaInaguracionPropuesta,
+            "metaDeVenta": p.metaDeVenta,
+            "metaDeAlumnos": p.metaDeAlumnos,
+            "alumnosReales": count_opty,
+            "montoReal": monto_opty,
+            "enRiesgo": bool(p.enRiesgo),
+            "comentario": p.comentario,
+            "alumnos": alumnos,
+        })
+
+    return {
+        "propuesta": {
+            "id": propuesta.id,
+            "nombre": propuesta.nombre,
+            "fechaPropuesta": propuesta.fechaPropuesta,
+            "horaPropuesta": propuesta.horaPropuesta,
+            "estado": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None,
+        },
+        "programas": items,
+        "total": len(items),
+    }
+
 
 @router.get("/{propuesta_id}/detalle")
 def obtener_resumen_propuesta(
