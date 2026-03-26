@@ -26,15 +26,34 @@ def obtener_programas_conciliacion(
     db: Session = Depends(get_db),
 ):
     """
-    Obtiene los programas de una propuesta para la vista de detalle de Conciliaciones.
-    Si se envía user_id, filtra según el rol del usuario:
-    - DAF: ve todos los programas
-    - JP: solo programas donde es idJefeProducto
-    - Subdirector Comercial: solo programas donde es idSubdirector
+    Obtiene los programas de una propuesta separados en mes_conciliado y meses_anteriores.
+    Igual que informacion_preconciliacion pero para la vista de Conciliaciones.
     """
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     if not propuesta:
         raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    fecha_propuesta = propuesta.fechaPropuesta
+    if not fecha_propuesta:
+        raise HTTPException(status_code=400, detail="La propuesta no tiene fecha")
+
+    # Calcular mes conciliado (mes anterior a la fecha de propuesta)
+    if fecha_propuesta.month == 1:
+        mes_conciliado = 12
+        anio_conciliado = fecha_propuesta.year - 1
+    else:
+        mes_conciliado = fecha_propuesta.month - 1
+        anio_conciliado = fecha_propuesta.year
+
+    # Calcular tres meses anteriores al mes conciliado (offsets 2, 3, 4)
+    meses_anteriores = []
+    for offset in [2, 3, 4]:
+        mes = fecha_propuesta.month - offset
+        anio = fecha_propuesta.year
+        while mes <= 0:
+            mes += 12
+            anio -= 1
+        meses_anteriores.append((mes, anio))
 
     # Filtrar programas según rol del usuario
     if user_id:
@@ -43,8 +62,7 @@ def obtener_programas_conciliacion(
 
         roles_daf = {"DAF - Supervisor", "DAF - Subdirector", "DAF - Admin"}
         if roles_usuario & roles_daf:
-            # DAF: acceso a todos los programas
-            programas = db.query(ProgramaModel).filter(
+            programas_all = db.query(ProgramaModel).filter(
                 ProgramaModel.idPropuesta == propuesta_id
             ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
         elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
@@ -53,17 +71,32 @@ def obtener_programas_conciliacion(
                 condiciones.append(ProgramaModel.idJefeProducto == user_id)
             if "Comercial - Subdirector" in roles_usuario:
                 condiciones.append(ProgramaModel.idSubdirector == user_id)
-            programas = db.query(ProgramaModel).filter(
+            programas_all = db.query(ProgramaModel).filter(
                 ProgramaModel.idPropuesta == propuesta_id,
                 or_(*condiciones)
             ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
         else:
-            programas = []
+            programas_all = []
     else:
-        # Sin user_id: todos los programas (backwards compatible)
-        programas = db.query(ProgramaModel).filter(
+        programas_all = db.query(ProgramaModel).filter(
             ProgramaModel.idPropuesta == propuesta_id
         ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
+
+    # Separar programas por mes
+    programas_mes_conciliado = [
+        p for p in programas_all
+        if p.fechaInaguracionPropuesta
+        and p.fechaInaguracionPropuesta.month == mes_conciliado
+        and p.fechaInaguracionPropuesta.year == anio_conciliado
+    ]
+    programas_tres_meses = [
+        p for p in programas_all
+        if p.fechaInaguracionPropuesta
+        and any(
+            p.fechaInaguracionPropuesta.month == m and p.fechaInaguracionPropuesta.year == a
+            for m, a in meses_anteriores
+        )
+    ]
 
     # Excluir oportunidades eliminadas y en etapas no válidas
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
@@ -77,13 +110,11 @@ def obtener_programas_conciliacion(
     for o in oportunidades_all:
         oportunidades_por_programa.setdefault(o.idPrograma, []).append(o)
 
-    items = []
-    for p in programas:
+    def build_programa_item(p):
         oportunidades = oportunidades_por_programa.get(p.id, [])
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
         count_opty = len(oportunidades)
 
-        # Datos de alumnos/oportunidades con info de edición
         alumnos = []
         for o in oportunidades:
             monto_editado = o.montoPropuesto != o.monto if o.monto else False
@@ -100,7 +131,7 @@ def obtener_programas_conciliacion(
                 "posibleAtipico": bool(o.posibleAtipico),
             })
 
-        items.append({
+        return {
             "id": p.id,
             "codigo": p.codigo,
             "nombre": p.nombre,
@@ -115,7 +146,10 @@ def obtener_programas_conciliacion(
             "enRiesgo": bool(p.enRiesgo),
             "comentario": p.comentario,
             "alumnos": alumnos,
-        })
+        }
+
+    items_conciliado = [build_programa_item(p) for p in programas_mes_conciliado]
+    items_anteriores = [build_programa_item(p) for p in programas_tres_meses]
 
     return {
         "propuesta": {
@@ -125,8 +159,8 @@ def obtener_programas_conciliacion(
             "horaPropuesta": propuesta.horaPropuesta,
             "estado": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None,
         },
-        "programas": items,
-        "total": len(items),
+        "mesConciliado": items_conciliado,
+        "mesesAnteriores": items_anteriores,
     }
 
 
