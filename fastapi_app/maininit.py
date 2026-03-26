@@ -150,11 +150,11 @@ def crear_usuarios_predeterminados():
             "clave": "daf.supervisor"
         },
         {
-            "nombre": "daf.jefe",
+            "nombre": "daf.admin",
             "documentoIdentidad": None,
             "correo": "123456789-sub@pucp.edu.pe",
             "rol_nombre": "DAF - Subdirector",
-            "clave": "daf.jefe"
+            "clave": "daf.admin"
         },
         {
             "nombre": "admin",
