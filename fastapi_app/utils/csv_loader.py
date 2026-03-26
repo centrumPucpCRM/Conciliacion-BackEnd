@@ -544,12 +544,12 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     
     solicitudes_bulk = []
     
-    # Obtener el receptor (DAF Subdirector)
-    receptor_usuario = db.query(Usuario).filter(Usuario.nombre == 'daf.subdirector').first()
-    
+    # Obtener el receptor (usuario con rol DAF - Subdirector)
+    receptor_usuario = db.query(Usuario).join(Usuario.roles).filter(Rol.nombre == "DAF - Subdirector").first()
+
     # Validar que el receptor existe
     if not receptor_usuario:
-        print(f"[WARNING] Usuario 'daf.subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
+        print(f"[WARNING] No se encontró usuario con rol 'DAF - Subdirector'. Saltando creación de solicitudes de subdirectores.")
         return
     
     for subdirector in subdirectores:
