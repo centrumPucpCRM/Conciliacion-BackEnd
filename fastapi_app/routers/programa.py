@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.programa import Programa
-from ..services.crm_service import obtener_fijos_fuera_counter
+from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter
 
 router = APIRouter(prefix="/programa", tags=["Programa"])
 
@@ -62,4 +62,20 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         "fijoFueraDeCounter": resultado["count"],
         "montoFijoFueraDeCounter": resultado["monto"],
     }
+
+
+@router.get("/{programa_id}/fijo-fuera-counter-leads")
+def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna la lista de leads 'Fijo fuera de counter' para un programa,
+    con los datos necesarios para mostrar en el modal detalle.
+    """
+    programa = db.query(Programa).filter(Programa.id == programa_id).first()
+    if not programa:
+        raise HTTPException(status_code=404, detail="Programa no encontrado")
+    if not programa.codigo:
+        raise HTTPException(status_code=400, detail="El programa no tiene código CRM")
+
+    leads = obtener_detalle_fijos_fuera_counter(programa.codigo)
+    return {"leads": leads, "total": len(leads)}
 

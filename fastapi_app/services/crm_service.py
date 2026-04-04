@@ -126,6 +126,50 @@ def obtener_fijos_fuera_counter(codigo_crm: str) -> Dict[str, Any]:
     return {"count": len(todos), "monto": float(total_monto)}
 
 
+def obtener_detalle_fijos_fuera_counter(codigo_crm: str) -> List[Dict[str, Any]]:
+    """
+    Retorna la lista completa de leads 'Fijo fuera de counter' para un programa:
+      1. Leads HOT + QUALIFIED
+      2. Leads CONVERTED con etapa no-CP ("1 - Interés" o "2 - Calificación")
+    """
+    url = f"{BASE}/leads"
+    FIELDS = (
+        "LeadNumber,CustomerPartyName,DealAmount,CurrencyCode,"
+        "StatusCode,CTRFannelDataEstudioEtapaOpty_c,CTRDsctoVentas_c,OwnerPartyName"
+    )
+
+    items_ffc = _get_all_items(url, {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};Rank=HOT;StatusCode=QUALIFIED",
+        "fields": FIELDS,
+    })
+
+    items_converted = _get_all_items(url, {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};StatusCode=CONVERTED",
+        "fields": FIELDS,
+    })
+    items_no_cp = [
+        i for i in items_converted
+        if i.get("CTRFannelDataEstudioEtapaOpty_c") in _ETAPAS_NO_CP
+    ]
+
+    todos = items_ffc + items_no_cp
+    return [
+        {
+            "leadNumber": i.get("LeadNumber"),
+            "nombre": i.get("CustomerPartyName"),
+            "monto": float(i.get("DealAmount") or 0),
+            "moneda": i.get("CurrencyCode"),
+            "estado": i.get("StatusCode"),
+            "etapa": i.get("CTRFannelDataEstudioEtapaOpty_c"),
+            "descuento": i.get("CTRDsctoVentas_c"),
+            "vendedor": i.get("OwnerPartyName"),
+        }
+        for i in todos
+    ]
+
+
 def leer_oportunidades_por_account(party: int) -> List[Dict[str, Any]]:
     """Lee las oportunidades asociadas a un account party."""
     url = f"{BASE}/opportunities"
