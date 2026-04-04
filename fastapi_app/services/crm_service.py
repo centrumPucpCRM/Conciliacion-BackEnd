@@ -91,21 +91,39 @@ def obtener_leads_convertidos(codigo_crm: str) -> List[Dict[str, Any]]:
     return _get_all_items(url, params)
 
 
+_ETAPAS_NO_CP = {"1 - Interés", "2 - Calificación"}
+
 def obtener_fijos_fuera_counter(codigo_crm: str) -> Dict[str, Any]:
     """
-    Obtiene el conteo y monto total de leads 'Fijo fuera de counter'
-    (Rank=HOT, StatusCode=QUALIFIED) para un programa.
+    Obtiene el conteo y monto total de 'Fijo fuera de counter' para un programa:
+      1. Leads HOT + QUALIFIED (fijos fuera de counter directos)
+      2. Leads CONVERTED cuya etapa (CTRFannelDataEstudioEtapaOpty_c) sea
+         "1 - Interés" o "2 - Calificación" (no CP)
     Retorna: {"count": int, "monto": float}
     """
     url = f"{BASE}/leads"
-    params = {
+
+    # --- Grupo 1: HOT + QUALIFIED ---
+    items_ffc = _get_all_items(url, {
         "onlyData": "true",
         "q": f"CTRProductoAsociado_Id_c={codigo_crm};Rank=HOT;StatusCode=QUALIFIED",
         "fields": "LeadNumber,DealAmount",
-    }
-    items = _get_all_items(url, params)
-    total_monto = sum(item.get("DealAmount", 0) or 0 for item in items)
-    return {"count": len(items), "monto": float(total_monto)}
+    })
+
+    # --- Grupo 2: CONVERTED con etapa no-CP ---
+    items_converted = _get_all_items(url, {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};StatusCode=CONVERTED",
+        "fields": "LeadNumber,DealAmount,CTRFannelDataEstudioEtapaOpty_c",
+    })
+    items_no_cp = [
+        i for i in items_converted
+        if i.get("CTRFannelDataEstudioEtapaOpty_c") in _ETAPAS_NO_CP
+    ]
+
+    todos = items_ffc + items_no_cp
+    total_monto = sum(i.get("DealAmount", 0) or 0 for i in todos)
+    return {"count": len(todos), "monto": float(total_monto)}
 
 
 def leer_oportunidades_por_account(party: int) -> List[Dict[str, Any]]:
