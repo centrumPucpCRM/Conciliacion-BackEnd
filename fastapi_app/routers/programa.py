@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.programa import Programa
-from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter
+from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter, obtener_alumnos_ultimo_momento
+from ..models.oportunidad import Oportunidad
 
 router = APIRouter(prefix="/programa", tags=["Programa"])
 
@@ -78,4 +79,34 @@ def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)
 
     leads = obtener_detalle_fijos_fuera_counter(programa.codigo)
     return {"leads": leads, "total": len(leads)}
+
+
+@router.get("/{programa_id}/alumnos-ultimo-momento")
+def get_alumnos_ultimo_momento(programa_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna alumnos que pasaron a etapas '3 - Matrícula' o '4 - Cerrada/Ganada'
+    en CRM pero NO están en la lista de alumnos conciliados del programa.
+    """
+    programa = db.query(Programa).filter(Programa.id == programa_id).first()
+    if not programa:
+        raise HTTPException(status_code=404, detail="Programa no encontrado")
+    if not programa.codigo:
+        return {"alumnos": []}
+
+    # Party numbers ya conciliados en BD
+    rows = db.query(Oportunidad.partyNumber).filter(
+        Oportunidad.idPrograma == programa_id,
+        Oportunidad.partyNumber.isnot(None),
+    ).all()
+    party_numbers_conciliados = {str(row[0]) for row in rows if row[0]}
+
+    # Leads en etapas cerradas del CRM
+    leads = obtener_alumnos_ultimo_momento(programa.codigo)
+
+    # Filtrar los que no están conciliados
+    ultimo_momento = [
+        l for l in leads
+        if l.get("partyNumber") not in party_numbers_conciliados
+    ]
+    return {"alumnos": ultimo_momento}
 

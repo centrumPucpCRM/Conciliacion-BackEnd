@@ -170,6 +170,40 @@ def obtener_detalle_fijos_fuera_counter(codigo_crm: str) -> List[Dict[str, Any]]
     ]
 
 
+_ETAPAS_CERRADAS = {"3 - Matrícula", "4 - Cerrada/Ganada"}
+
+def obtener_alumnos_ultimo_momento(codigo_crm: str) -> List[Dict[str, Any]]:
+    """
+    Retorna leads CONVERTED en etapas '3 - Matrícula' o '4 - Cerrada/Ganada'.
+    Estos pasaron a esas etapas después del snapshot de conciliación.
+    La exclusión de los ya conciliados se hace en el router comparando partyNumber.
+    """
+    url = f"{BASE}/leads"
+    FIELDS = (
+        "LeadNumber,CustomerPartyName,DealAmount,CurrencyCode,"
+        "StatusCode,CTRFannelDataEstudioEtapaOpty_c,CTRDsctoVentas_c,OwnerPartyName,AccountPartyNumber"
+    )
+    items_converted = _get_all_items(url, {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};StatusCode=CONVERTED",
+        "fields": FIELDS,
+    })
+    return [
+        {
+            "leadNumber": i.get("LeadNumber"),
+            "nombre": i.get("CustomerPartyName"),
+            "monto": float(i.get("DealAmount") or 0),
+            "moneda": i.get("CurrencyCode"),
+            "etapa": i.get("CTRFannelDataEstudioEtapaOpty_c"),
+            "descuento": i.get("CTRDsctoVentas_c"),
+            "vendedor": i.get("OwnerPartyName"),
+            "partyNumber": str(i.get("AccountPartyNumber") or ""),
+        }
+        for i in items_converted
+        if i.get("CTRFannelDataEstudioEtapaOpty_c") in _ETAPAS_CERRADAS
+    ]
+
+
 def leer_oportunidades_por_account(party: int) -> List[Dict[str, Any]]:
     """Lee las oportunidades asociadas a un account party."""
     url = f"{BASE}/opportunities"
