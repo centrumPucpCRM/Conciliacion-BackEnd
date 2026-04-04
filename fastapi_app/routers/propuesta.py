@@ -485,10 +485,12 @@ def conciliar_propuesta(
     # Cambiar estado a CONCILIADA
     propuesta.estadoPropuesta_id = estado_conciliada.id
 
-    # Marcar como conciliadas todas las oportunidades no eliminadas de esta propuesta
+    # Marcar como conciliadas las oportunidades válidas de esta propuesta
+    etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
     db.query(Oportunidad).filter(
         Oportunidad.idPropuesta == id_propuesta,
         Oportunidad.eliminado == False,
+        Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
     ).update({"conciliado": True}, synchronize_session="fetch")
 
     db.commit()
