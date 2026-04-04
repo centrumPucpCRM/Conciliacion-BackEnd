@@ -129,6 +129,7 @@ def obtener_programas_conciliacion(
                 "etapaVentaPropuesta": o.etapaVentaPropuesta,
                 "becado": bool(o.becado),
                 "posibleAtipico": bool(o.posibleAtipico),
+                "conciliado": bool(o.conciliado),
             })
 
         return {
@@ -483,6 +484,13 @@ def conciliar_propuesta(
     
     # Cambiar estado a CONCILIADA
     propuesta.estadoPropuesta_id = estado_conciliada.id
+
+    # Marcar como conciliadas todas las oportunidades no eliminadas de esta propuesta
+    db.query(Oportunidad).filter(
+        Oportunidad.idPropuesta == id_propuesta,
+        Oportunidad.eliminado == False,
+    ).update({"conciliado": True}, synchronize_session="fetch")
+
     db.commit()
     db.refresh(propuesta)
     
