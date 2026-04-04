@@ -14,7 +14,7 @@ class Oportunidad(Base):
     monto = Column(Float)#
     becado = Column(Boolean, default=False)####
     partyNumber = Column(Integer)####
-    conciliado = Column(Boolean, default=False)#FALTA
+    conciliado = Column(Boolean, default=False)#
     posibleAtipico = Column(Boolean, default=False)####
     moneda = Column(String(50))#
     fechaMatricula = Column(Date)####

@@ -145,6 +145,8 @@ def obtener_programas_conciliacion(
             "montoReal": monto_opty,
             "enRiesgo": bool(p.enRiesgo),
             "comentario": p.comentario,
+            "fijoFueraDeCounter": p.fijoFueraDeCounter or 0,
+            "montoFijoFueraDeCounter": p.montoFijoFueraDeCounter or 0.0,
             "alumnos": alumnos,
         }
 
@@ -161,6 +163,49 @@ def obtener_programas_conciliacion(
         },
         "mesConciliado": items_conciliado,
         "mesesAnteriores": items_anteriores,
+    }
+
+
+@router.post("/{propuesta_id}/sync-todos-fijo-fuera-counter")
+def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_db)):
+    """
+    Consulta Oracle Sales Cloud y actualiza el conteo de 'Fijo fuera de counter'
+    para todos los programas de una propuesta.
+    """
+    from ..services.crm_service import obtener_fijos_fuera_counter
+
+    propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    programas = db.query(ProgramaModel).filter(
+        ProgramaModel.idPropuesta == propuesta_id,
+        ProgramaModel.codigo.isnot(None),
+    ).all()
+
+    resultados = []
+    errores = 0
+
+    for p in programas:
+        try:
+            resultado = obtener_fijos_fuera_counter(p.codigo)
+            p.fijoFueraDeCounter = resultado["count"]
+            p.montoFijoFueraDeCounter = resultado["monto"]
+            resultados.append({
+                "idPrograma": p.id,
+                "fijoFueraDeCounter": resultado["count"],
+                "montoFijoFueraDeCounter": resultado["monto"],
+            })
+        except Exception as e:
+            errores += 1
+            resultados.append({"idPrograma": p.id, "error": str(e)})
+
+    db.commit()
+
+    return {
+        "actualizados": len(resultados) - errores,
+        "errores": errores,
+        "resultados": resultados,
     }
 
 

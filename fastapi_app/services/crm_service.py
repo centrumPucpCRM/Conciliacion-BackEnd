@@ -91,6 +91,23 @@ def obtener_leads_convertidos(codigo_crm: str) -> List[Dict[str, Any]]:
     return _get_all_items(url, params)
 
 
+def obtener_fijos_fuera_counter(codigo_crm: str) -> Dict[str, Any]:
+    """
+    Obtiene el conteo y monto total de leads 'Fijo fuera de counter'
+    (Rank=HOT, StatusCode=QUALIFIED) para un programa.
+    Retorna: {"count": int, "monto": float}
+    """
+    url = f"{BASE}/leads"
+    params = {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};Rank=HOT;StatusCode=QUALIFIED",
+        "fields": "LeadNumber,DealAmount",
+    }
+    items = _get_all_items(url, params)
+    total_monto = sum(item.get("DealAmount", 0) or 0 for item in items)
+    return {"count": len(items), "monto": float(total_monto)}
+
+
 def leer_oportunidades_por_account(party: int) -> List[Dict[str, Any]]:
     """Lee las oportunidades asociadas a un account party."""
     url = f"{BASE}/opportunities"

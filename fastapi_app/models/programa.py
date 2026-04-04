@@ -33,3 +33,5 @@ class Programa(Base):
     noAperturar = Column(Boolean,default=False)
     noCalcular = Column(Boolean,default=False)
     enRiesgo = Column(Boolean,default=False)
+    fijoFueraDeCounter = Column(Integer, nullable=True, default=0)
+    montoFijoFueraDeCounter = Column(Float, nullable=True, default=0.0)
