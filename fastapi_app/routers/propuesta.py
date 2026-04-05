@@ -61,7 +61,8 @@ def obtener_programas_conciliacion(
         roles_usuario = {rol.nombre for rol in usuario.roles} if usuario and usuario.roles else set()
 
         roles_daf = {"DAF - Supervisor", "DAF - Subdirector", "DAF - Admin"}
-        if roles_usuario & roles_daf:
+        roles_ver_todo = roles_daf | {"Comercial - Director"}
+        if roles_usuario & roles_ver_todo:
             programas_all = db.query(ProgramaModel).filter(
                 ProgramaModel.idPropuesta == propuesta_id
             ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
