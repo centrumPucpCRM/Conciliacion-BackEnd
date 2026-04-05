@@ -135,8 +135,7 @@ def obtener_detalle_fijos_fuera_counter(codigo_crm: str) -> List[Dict[str, Any]]
     url = f"{BASE}/leads"
     FIELDS = (
         "LeadNumber,CustomerPartyName,DealAmount,CurrencyCode,"
-        "StatusCode,CTRFannelDataEstudioEtapaOpty_c,CTRDsctoVentas_c,OwnerPartyName,"
-        "PersonDEO_CTRNrodedocumento_c"
+        "StatusCode,CTRFannelDataEstudioEtapaOpty_c,CTRDsctoVentas_c,OwnerPartyName"
     )
 
     items_ffc = _get_all_items(url, {
@@ -160,7 +159,7 @@ def obtener_detalle_fijos_fuera_counter(codigo_crm: str) -> List[Dict[str, Any]]
         {
             "leadNumber": i.get("LeadNumber"),
             "nombre": i.get("CustomerPartyName"),
-            "dni": i.get("PersonDEO_CTRNrodedocumento_c"),
+            "dni": None,
             "monto": float(i.get("DealAmount") or 0),
             "moneda": i.get("CurrencyCode"),
             "estado": i.get("StatusCode"),
@@ -184,7 +183,7 @@ def obtener_alumnos_ultimo_momento(codigo_crm: str) -> List[Dict[str, Any]]:
     FIELDS = (
         "LeadNumber,CustomerPartyName,DealAmount,CurrencyCode,"
         "StatusCode,CTRFannelDataEstudioEtapaOpty_c,CTRDsctoVentas_c,OwnerPartyName,"
-        "AccountPartyNumber,PersonDEO_CTRNrodedocumento_c"
+        "AccountPartyNumber"
     )
     items_converted = _get_all_items(url, {
         "onlyData": "true",
@@ -195,7 +194,7 @@ def obtener_alumnos_ultimo_momento(codigo_crm: str) -> List[Dict[str, Any]]:
         {
             "leadNumber": i.get("LeadNumber"),
             "nombre": i.get("CustomerPartyName"),
-            "dni": i.get("PersonDEO_CTRNrodedocumento_c"),
+            "dni": None,
             "monto": float(i.get("DealAmount") or 0),
             "moneda": i.get("CurrencyCode"),
             "etapa": i.get("CTRFannelDataEstudioEtapaOpty_c"),
