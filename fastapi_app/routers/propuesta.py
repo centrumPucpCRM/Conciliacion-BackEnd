@@ -178,8 +178,11 @@ def obtener_programas_conciliacion(
             "abierta": s.abierta,
         })
 
-    if user_id and not es_conciliada:
-        roles_usuario = {rol.nombre for rol in (db.query(Usuario).filter(Usuario.id == user_id).first().roles if db.query(Usuario).filter(Usuario.id == user_id).first() else [])}
+    es_proyectada = estado_nombre == "PROYECTADA"
+
+    if user_id and es_conciliada:
+        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+        roles_usuario = {rol.nombre for rol in (usuario.roles if usuario and usuario.roles else [])}
 
         es_jp = "Comercial - Jefe de producto" in roles_usuario
         es_subdirector = "Comercial - Subdirector" in roles_usuario
@@ -212,10 +215,10 @@ def obtener_programas_conciliacion(
                     for s in solicitudes_conciliacion
                 )
             )
-            flags["verBotonConciliar"] = True
-            flags["puedeConciliar"] = todas_aceptadas
+            flags["verBotonProyectar"] = True
+            flags["puedeProyectar"] = todas_aceptadas
 
-    if es_conciliada:
+    if es_proyectada:
         flags["noVerBotones"] = True
         flags["noEditarNada"] = True
 
@@ -573,5 +576,77 @@ def conciliar_propuesta(
         "estadoNuevo": {
             "id": propuesta.estadoPropuesta_id,
             "nombre": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else "CONCILIADA"
+        }
+    }
+
+
+@router.patch("/proyectar")
+def proyectar_propuesta(
+    body: dict = Body(
+        ...,
+        example={
+            "idPropuesta": 1
+        }
+    ),
+    db: Session = Depends(get_db)
+):
+    """
+    Proyecta una propuesta cambiando su estado de CONCILIADA a PROYECTADA.
+    Solo se permite si todas las solicitudes APROBACION_JP_CONCILIACION están ACEPTADAS.
+    """
+    id_propuesta = body.get("idPropuesta")
+
+    if not id_propuesta:
+        raise HTTPException(status_code=400, detail="El campo 'idPropuesta' es requerido")
+
+    from ..models.propuesta import EstadoPropuesta
+    estado_proyectada = db.query(EstadoPropuesta).filter(EstadoPropuesta.nombre == "PROYECTADA").first()
+    if not estado_proyectada:
+        raise HTTPException(status_code=500, detail="Estado PROYECTADA no encontrado en la base de datos")
+
+    propuesta = db.query(Propuesta).filter(Propuesta.id == id_propuesta).first()
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    estado_actual = propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None
+    if estado_actual != "CONCILIADA":
+        raise HTTPException(
+            status_code=400,
+            detail=f"La propuesta debe estar en estado CONCILIADA para ser proyectada. Estado actual: {estado_actual}"
+        )
+
+    # Verificar que todas las solicitudes de conciliación estén aprobadas
+    tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP_CONCILIACION").first()
+    if tipo_aprobacion:
+        solicitudes = db.query(SolicitudModel).filter(
+            SolicitudModel.idPropuesta == id_propuesta,
+            SolicitudModel.tipoSolicitud_id == tipo_aprobacion.id,
+        ).all()
+        if solicitudes:
+            todas_aceptadas = all(
+                s.valorSolicitud and s.valorSolicitud.nombre == "ACEPTADO"
+                for s in solicitudes
+            )
+            if not todas_aceptadas:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede proyectar: hay solicitudes de aprobación pendientes"
+                )
+
+    estado_anterior_id = propuesta.estadoPropuesta_id
+    propuesta.estadoPropuesta_id = estado_proyectada.id
+    db.commit()
+    db.refresh(propuesta)
+
+    return {
+        "msg": "Propuesta proyectada exitosamente",
+        "idPropuesta": propuesta.id,
+        "estadoAnterior": {
+            "id": estado_anterior_id,
+            "nombre": "CONCILIADA"
+        },
+        "estadoNuevo": {
+            "id": propuesta.estadoPropuesta_id,
+            "nombre": "PROYECTADA"
         }
     }
