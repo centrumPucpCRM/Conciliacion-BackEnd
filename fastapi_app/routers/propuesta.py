@@ -260,6 +260,11 @@ def obtener_programas_conciliacion(
             flags["verBotonProyectar"] = True
             flags["puedeProyectar"] = todas_aceptadas
 
+    # Subdirector puro y Director no pueden sincronizar programas
+    # (Subdirector que además es JP sí puede)
+    if (es_subdirector and not es_jp) or (es_director_comercial and not es_jp):
+        flags["noActualizar"] = True
+
     if es_proyectada:
         flags["noVerBotones"] = True
         flags["noEditarNada"] = True
@@ -374,6 +379,12 @@ def obtener_estados_propuesta(db: Session = Depends(get_db)):
         - canceladas: conteo de propuestas en estado CANCELADA
     """
     counts = PropuestaFilterService.get_estado_counts(db)
+    # Incluir PROYECTADA en el conteo de "conciliadas" para la vista de Conciliaciones
+    from ..models.propuesta import EstadoPropuesta as EstadoPropuestaModel
+    proyectadas_count = db.query(Propuesta).join(EstadoPropuestaModel).filter(
+        EstadoPropuestaModel.nombre == "PROYECTADA"
+    ).count()
+    counts["conciliadas"] = counts.get("conciliadas", 0) + proyectadas_count
     return counts
 
 
