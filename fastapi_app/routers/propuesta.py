@@ -192,14 +192,40 @@ def obtener_programas_conciliacion(
 
     es_proyectada = estado_nombre == "PROYECTADA"
 
-    if user_id and es_conciliada:
+    # Determinar roles del usuario actual (necesario tanto para CONCILIADA como para PROYECTADA)
+    es_jp = es_subdirector = es_daf = False
+    if user_id:
         usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
         roles_usuario = {rol.nombre for rol in (usuario.roles if usuario and usuario.roles else [])}
-
         es_jp = "Comercial - Jefe de producto" in roles_usuario
         es_subdirector = "Comercial - Subdirector" in roles_usuario
         es_daf = bool(roles_usuario & {"DAF - Supervisor", "DAF - Subdirector"})
 
+    # Filtrar solicitudes_resumen según el rol:
+    # - DAF: ve todas
+    # - Subdirector (y también JP): ve las que le corresponde aprobar (receptor)
+    # - JP puro: ve solo las que él generó
+    # - Sin rol conocido: no ve ninguna
+    if user_id:
+        if es_daf:
+            pass  # ve todas, no filtrar
+        elif es_subdirector:
+            # Subdirector (con o sin rol JP): ve las que son para él como receptor
+            # Si además es JP, también ve las que generó
+            if es_jp:
+                solicitudes_resumen = [r for r in solicitudes_resumen
+                                       if r["idUsuarioReceptor"] == user_id or r["idUsuarioGenerador"] == user_id]
+            else:
+                solicitudes_resumen = [r for r in solicitudes_resumen if r["idUsuarioReceptor"] == user_id]
+        elif es_jp:
+            # JP puro: solo ve las suyas propias
+            solicitudes_resumen = [r for r in solicitudes_resumen if r["idUsuarioGenerador"] == user_id]
+        else:
+            solicitudes_resumen = []
+    else:
+        solicitudes_resumen = []
+
+    if user_id and es_conciliada:
         if es_jp:
             # Solicitudes que ESTE JP generó
             mis_solicitudes = [s for s in solicitudes_conciliacion if s.idUsuarioGenerador == user_id]
