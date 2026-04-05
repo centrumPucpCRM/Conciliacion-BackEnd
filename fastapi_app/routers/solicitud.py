@@ -362,6 +362,142 @@ def editar_solicitud_subdirectores(
 	
 	return aceptar_rechazar_solicitud_subdirectores(body, db, solicitud)
 
+@router.patch("/abrir-solicitudes-aprobacion-jp-conciliacion")
+def abrir_solicitudes_aprobacion_jp_conciliacion(
+	body: dict = Body(
+		...,
+		example={
+			"idUsuario": 7,
+			"idPropuesta": 1
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Crea o reabre solicitudes de tipo APROBACION_JP_CONCILIACION para un JP en una propuesta.
+	- Agrupa los programas del JP y crea una solicitud por cada subdirector distinto.
+	- Si idJefeProducto == idSubdirector en un programa, auto-aprueba esa solicitud.
+	- Pone abierta=False para bloquear al JP de seguir editando.
+	"""
+	from ..models.programa import Programa as ProgramaModel
+	from datetime import datetime
+	import pytz
+
+	id_usuario = body.get("idUsuario")
+	id_propuesta = body.get("idPropuesta")
+
+	if not id_usuario or not id_propuesta:
+		return {"error": "Se requieren idUsuario e idPropuesta"}
+
+	peru_tz = pytz.timezone('America/Lima')
+	ahora = datetime.now(peru_tz).replace(tzinfo=None)
+
+	from ..models.solicitud import TipoSolicitud
+	tipo_aprobacion = db.query(TipoSolicitud).filter_by(
+		nombre="APROBACION_JP_CONCILIACION"
+	).first()
+	if not tipo_aprobacion:
+		return {"error": "TipoSolicitud APROBACION_JP_CONCILIACION no encontrado. Ejecute seed_lovs."}
+
+	valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
+	valor_aceptado = db.query(ValorSolicitud).filter_by(nombre="ACEPTADO").first()
+
+	# Obtener programas del JP en esta propuesta
+	programas_jp = db.query(ProgramaModel).filter(
+		ProgramaModel.idPropuesta == id_propuesta,
+		ProgramaModel.idJefeProducto == id_usuario
+	).all()
+
+	if not programas_jp:
+		return {"error": "No se encontraron programas asignados a este JP en la propuesta"}
+
+	# Agrupar por subdirector
+	subdirectores = {}
+	for p in programas_jp:
+		sub_id = p.idSubdirector or id_usuario
+		subdirectores.setdefault(sub_id, []).append(p)
+
+	# Buscar solicitudes existentes para reutilizar/reabrir
+	solicitudes_existentes = db.query(SolicitudModel).filter(
+		SolicitudModel.idUsuarioGenerador == id_usuario,
+		SolicitudModel.idPropuesta == id_propuesta,
+		SolicitudModel.tipoSolicitud_id == tipo_aprobacion.id
+	).all()
+	existentes_por_receptor = {s.idUsuarioReceptor: s for s in solicitudes_existentes}
+
+	solicitudes_actualizadas = []
+	for sub_id, progs in subdirectores.items():
+		auto_aprobar = (sub_id == id_usuario)
+
+		if sub_id in existentes_por_receptor:
+			solicitud = existentes_por_receptor[sub_id]
+			solicitud.valorSolicitud_id = valor_aceptado.id if auto_aprobar else valor_pendiente.id
+			solicitud.abierta = False
+			solicitud.creadoEn = ahora
+		else:
+			solicitud = SolicitudModel(
+				idUsuarioGenerador=id_usuario,
+				idUsuarioReceptor=sub_id,
+				tipoSolicitud_id=tipo_aprobacion.id,
+				valorSolicitud_id=valor_aceptado.id if auto_aprobar else valor_pendiente.id,
+				idPropuesta=id_propuesta,
+				abierta=False,
+				creadoEn=ahora,
+				comentario=f"Solicitud de aprobación de conciliación por JP",
+			)
+			db.add(solicitud)
+
+		solicitudes_actualizadas.append({
+			"idSubdirector": sub_id,
+			"autoAprobada": auto_aprobar,
+			"programas": [p.id for p in progs],
+		})
+
+	db.commit()
+
+	return {
+		"msg": f"Se procesaron {len(solicitudes_actualizadas)} solicitudes de aprobación de conciliación",
+		"solicitudes": solicitudes_actualizadas,
+		"idUsuario": id_usuario,
+		"idPropuesta": id_propuesta,
+	}
+
+
+@router.patch("/aprobar-rechazar-conciliacion")
+def aprobar_rechazar_conciliacion(
+	body: dict = Body(
+		...,
+		example={
+			"idSolicitud": 10,
+			"valorSolicitud": "ACEPTADO",
+			"comentario": "Aprobado por subdirector"
+		}
+	),
+	db: Session = Depends(get_db)
+):
+	"""
+	Endpoint para que subdirectores aprueben o rechacen solicitudes APROBACION_JP_CONCILIACION.
+	- RECHAZADO: abierta=True (JP puede editar de nuevo)
+	- ACEPTADO: valorSolicitud=ACEPTADO
+	"""
+	idSolicitud = body.get("idSolicitud")
+
+	if not idSolicitud:
+		return {"error": "Se requiere idSolicitud"}
+
+	solicitud = db.query(SolicitudModel).filter_by(id=idSolicitud).first()
+
+	if not solicitud:
+		return {"error": "Solicitud no encontrada"}
+
+	tipo_solicitud = solicitud.tipoSolicitud.nombre if solicitud.tipoSolicitud else None
+
+	if tipo_solicitud != "APROBACION_JP_CONCILIACION":
+		return {"error": "Este endpoint solo maneja solicitudes de tipo APROBACION_JP_CONCILIACION"}
+
+	return aceptar_rechazar_solicitud_subdirectores(body, db, solicitud)
+
+
 @router.get("/debug-logs/{id_solicitud}")
 def debug_logs_solicitud(
 	id_solicitud: int,

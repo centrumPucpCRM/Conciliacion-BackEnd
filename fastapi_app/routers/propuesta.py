@@ -155,16 +155,82 @@ def obtener_programas_conciliacion(
     items_conciliado = [build_programa_item(p) for p in programas_mes_conciliado]
     items_anteriores = [build_programa_item(p) for p in programas_tres_meses]
 
+    # === FLAGS DE SOLICITUDES DE CONCILIACION ===
+    estado_nombre = propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None
+    es_conciliada = estado_nombre == "CONCILIADA"
+
+    tipo_aprobacion_conc = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP_CONCILIACION").first()
+    solicitudes_conciliacion = []
+    if tipo_aprobacion_conc:
+        solicitudes_conciliacion = db.query(SolicitudModel).filter(
+            SolicitudModel.idPropuesta == propuesta_id,
+            SolicitudModel.tipoSolicitud_id == tipo_aprobacion_conc.id,
+        ).all()
+
+    flags = {}
+    solicitudes_resumen = []
+    for s in solicitudes_conciliacion:
+        solicitudes_resumen.append({
+            "id": s.id,
+            "idUsuarioGenerador": s.idUsuarioGenerador,
+            "idUsuarioReceptor": s.idUsuarioReceptor,
+            "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
+            "abierta": s.abierta,
+        })
+
+    if user_id and not es_conciliada:
+        roles_usuario = {rol.nombre for rol in (db.query(Usuario).filter(Usuario.id == user_id).first().roles if db.query(Usuario).filter(Usuario.id == user_id).first() else [])}
+
+        es_jp = "Comercial - Jefe de producto" in roles_usuario
+        es_subdirector = "Comercial - Subdirector" in roles_usuario
+        es_daf = bool(roles_usuario & {"DAF - Supervisor", "DAF - Subdirector"})
+
+        if es_jp:
+            # Solicitudes que ESTE JP generó
+            mis_solicitudes = [s for s in solicitudes_conciliacion if s.idUsuarioGenerador == user_id]
+            ya_solicito = len(mis_solicitudes) > 0 and all(not s.abierta for s in mis_solicitudes)
+            alguna_rechazada = any(s.abierta for s in mis_solicitudes)
+
+            flags["verBotonSolicitarAprobacion"] = True
+            flags["yaSolicito"] = ya_solicito and not alguna_rechazada
+            flags["solicitudRechazada"] = alguna_rechazada
+
+        if es_subdirector:
+            # Solicitudes donde ESTE subdirector es receptor y están pendientes
+            solicitudes_para_mi = [s for s in solicitudes_conciliacion
+                                   if s.idUsuarioReceptor == user_id
+                                   and not s.abierta
+                                   and s.valorSolicitud and s.valorSolicitud.nombre == "PENDIENTE"]
+            flags["verBotonAprobarConciliacion"] = len(solicitudes_para_mi) > 0
+            flags["solicitudesPendientesParaMi"] = [{"id": s.id, "idJP": s.idUsuarioGenerador} for s in solicitudes_para_mi]
+
+        if es_daf:
+            todas_aceptadas = (
+                len(solicitudes_conciliacion) > 0
+                and all(
+                    s.valorSolicitud and s.valorSolicitud.nombre == "ACEPTADO"
+                    for s in solicitudes_conciliacion
+                )
+            )
+            flags["verBotonConciliar"] = True
+            flags["puedeConciliar"] = todas_aceptadas
+
+    if es_conciliada:
+        flags["noVerBotones"] = True
+        flags["noEditarNada"] = True
+
     return {
         "propuesta": {
             "id": propuesta.id,
             "nombre": propuesta.nombre,
             "fechaPropuesta": propuesta.fechaPropuesta,
             "horaPropuesta": propuesta.horaPropuesta,
-            "estado": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else None,
+            "estado": estado_nombre,
         },
         "mesConciliado": items_conciliado,
         "mesesAnteriores": items_anteriores,
+        "solicitudesConciliacion": solicitudes_resumen,
+        "flags": flags,
     }
 
 
