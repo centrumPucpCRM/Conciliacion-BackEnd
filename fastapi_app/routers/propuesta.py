@@ -169,13 +169,25 @@ def obtener_programas_conciliacion(
 
     flags = {}
     solicitudes_resumen = []
+    # Cache de nombres de usuario para no repetir queries
+    _user_name_cache = {}
+    def _get_user_name(uid):
+        if uid not in _user_name_cache:
+            u = db.query(Usuario).filter(Usuario.id == uid).first()
+            _user_name_cache[uid] = u.nombre if u else None
+        return _user_name_cache[uid]
+
     for s in solicitudes_conciliacion:
         solicitudes_resumen.append({
             "id": s.id,
             "idUsuarioGenerador": s.idUsuarioGenerador,
             "idUsuarioReceptor": s.idUsuarioReceptor,
+            "nombreGenerador": _get_user_name(s.idUsuarioGenerador),
+            "nombreReceptor": _get_user_name(s.idUsuarioReceptor),
+            "tipoSolicitud": s.tipoSolicitud.nombre if s.tipoSolicitud else None,
             "valorSolicitud": s.valorSolicitud.nombre if s.valorSolicitud else None,
             "abierta": s.abierta,
+            "comentario": s.comentario,
         })
 
     es_proyectada = estado_nombre == "PROYECTADA"
