@@ -202,11 +202,14 @@ def obtener_programas_conciliacion(
         es_director_comercial = "Comercial - Director" in roles_usuario
 
     # Filtrar solicitudes_resumen según el rol:
+    # - PROYECTADA: todos ven todas (modo solo lectura)
     # - Director Comercial: ve todas
     # - Subdirector (y también JP): ve las que le corresponde aprobar (receptor)
     # - JP puro: ve solo las que él generó
     # - Sin rol conocido: no ve ninguna
-    if user_id:
+    if es_proyectada:
+        pass  # modo solo lectura: todos ven todas las solicitudes
+    elif user_id:
         if es_director_comercial:
             pass  # ve todas, no filtrar
         elif es_subdirector:
