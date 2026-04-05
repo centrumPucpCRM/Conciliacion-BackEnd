@@ -193,21 +193,21 @@ def obtener_programas_conciliacion(
     es_proyectada = estado_nombre == "PROYECTADA"
 
     # Determinar roles del usuario actual (necesario tanto para CONCILIADA como para PROYECTADA)
-    es_jp = es_subdirector = es_daf = False
+    es_jp = es_subdirector = es_director_comercial = False
     if user_id:
         usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
         roles_usuario = {rol.nombre for rol in (usuario.roles if usuario and usuario.roles else [])}
         es_jp = "Comercial - Jefe de producto" in roles_usuario
         es_subdirector = "Comercial - Subdirector" in roles_usuario
-        es_daf = bool(roles_usuario & {"DAF - Supervisor", "DAF - Subdirector"})
+        es_director_comercial = "Comercial - Director" in roles_usuario
 
     # Filtrar solicitudes_resumen según el rol:
-    # - DAF: ve todas
+    # - Director Comercial: ve todas
     # - Subdirector (y también JP): ve las que le corresponde aprobar (receptor)
     # - JP puro: ve solo las que él generó
     # - Sin rol conocido: no ve ninguna
     if user_id:
-        if es_daf:
+        if es_director_comercial:
             pass  # ve todas, no filtrar
         elif es_subdirector:
             # Subdirector (con o sin rol JP): ve las que son para él como receptor
@@ -245,7 +245,7 @@ def obtener_programas_conciliacion(
             flags["verBotonAprobarConciliacion"] = len(solicitudes_para_mi) > 0
             flags["solicitudesPendientesParaMi"] = [{"id": s.id, "idJP": s.idUsuarioGenerador} for s in solicitudes_para_mi]
 
-        if es_daf:
+        if es_director_comercial:
             todas_aceptadas = (
                 len(solicitudes_conciliacion) > 0
                 and all(

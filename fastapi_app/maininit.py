@@ -125,6 +125,7 @@ def crear_roles_predeterminados():
         "Administrador",
         "Comercial - Jefe de producto",
         "Comercial - Subdirector",
+        "Comercial - Director",
         "DAF - Subdirector",
         "DAF - Supervisor"
     }
@@ -163,6 +164,13 @@ def crear_usuarios_predeterminados():
             "correo": "admin@pucp.edu.pe",
             "rol_nombre": "Administrador",
             "clave": "admin"
+        },
+        {
+            "nombre": "comercial.director",
+            "documentoIdentidad": None,
+            "correo": "comercial.director@pucp.edu.pe",
+            "rol_nombre": "Comercial - Director",
+            "clave": "comercial.director"
         }
     ]
 
@@ -274,6 +282,9 @@ def crearRoles_x_PermisosPredeterminados():
             "BotonVerConciliacion",
             "TablaEditarGeneracion",
             "TablaVerNoAperturarGeneracion"
+        },
+        "Comercial - Director": {
+            "BotonVerConciliacion",
         },
     }
 
