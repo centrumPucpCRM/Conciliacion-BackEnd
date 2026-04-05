@@ -121,6 +121,7 @@ def obtener_programas_conciliacion(
             alumnos.append({
                 "id": o.id,
                 "nombre": o.nombre,
+                "documentoIdentidad": o.documentoIdentidad,
                 "descuento": o.descuento,
                 "monto": o.monto,
                 "montoPropuesto": o.montoPropuesto,
