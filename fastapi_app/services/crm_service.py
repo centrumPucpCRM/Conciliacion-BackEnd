@@ -22,7 +22,7 @@ HEADERS = {
     "Content-Type": "application/json",
 }
 DEFAULT_FIELDS_OPTY = (
-    "CTRCodigoDeProgramaCRM_c,CTRPorctDescVentas_c,Revenue,CTRVentaConciliada_c,"
+    "OptyNumber,CTRCodigoDeProgramaCRM_c,CTRPorctDescVentas_c,Revenue,CTRVentaConciliada_c,"
     "CTRPrecioLista_c,CTRMoneda_c,CTRFMatricula_c,CTRInstanteCerradaGamada_c,"
     "CreationDate,OwnerPartyNumber"
 )
@@ -422,6 +422,7 @@ def _transformar_oportunidad_crm(data_crm: Dict[str, Any], id_programa: int, id_
         "monto": monto,
         "becado": becado,
         "partyNumber": data_crm.get("PartyNumber"),
+        "optyNumber": str(data_crm.get("OptyNumber", "")) or None,
         "conciliado": data_crm.get("CTRVentaConciliada_c", False),
         "posibleAtipico": posible_atipico,
         "moneda": data_crm.get("CTRMoneda_c", ""),
@@ -544,4 +545,56 @@ def sincronizar_oportunidades_crm(db: Session, codigo_crm: str) -> Dict[str, Any
     except Exception as e:
         db.rollback()
         raise Exception(f"Error en sincronización CRM: {str(e)}")
+
+
+def actualizar_conciliado_crm(opty_number: str, conciliado: bool) -> Dict[str, Any]:
+    """
+    Actualiza el campo CTRVentaConciliada_c de una oportunidad en el CRM.
+
+    Args:
+        opty_number: OptyNumber de la oportunidad en el CRM
+        conciliado: True → "Y", False → "N"
+    """
+    url = f"{BASE}/opportunities/{opty_number}"
+    session = get_session()
+    params = {"onlyData": "true", "fields": "CTRVentaConciliada_c"}
+    payload = {"CTRVentaConciliada_c": "Y" if conciliado else "N"}
+
+    try:
+        res = session.patch(url, json=payload, params=params, timeout=15)
+        res.raise_for_status()
+        return res.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error actualizando oportunidad {opty_number} en CRM: {str(e)}")
+        raise
+
+
+def actualizar_conciliado_crm_batch(opty_numbers: List[str], conciliado: bool) -> Dict[str, Any]:
+    """
+    Actualiza CTRVentaConciliada_c para múltiples oportunidades en paralelo.
+
+    Returns:
+        Dict con estadísticas: exitosos, errores
+    """
+    if not opty_numbers:
+        return {"exitosos": 0, "errores": 0}
+
+    estadisticas = {"exitosos": 0, "errores": 0}
+    max_workers = min(len(opty_numbers), 20)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(actualizar_conciliado_crm, opty, conciliado): opty
+            for opty in opty_numbers
+        }
+        for future in as_completed(futures):
+            opty = futures[future]
+            try:
+                future.result()
+                estadisticas["exitosos"] += 1
+            except Exception as e:
+                print(f"Error actualizando opty {opty}: {str(e)}")
+                estadisticas["errores"] += 1
+
+    return estadisticas
 

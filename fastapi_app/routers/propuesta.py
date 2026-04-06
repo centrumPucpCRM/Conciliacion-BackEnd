@@ -14,6 +14,7 @@ from ..schemas.propuesta import PropuestaListadoPage
 from ..services.propuesta_filter_service import PropuestaFilterService
 from ..models.programa import Programa as ProgramaModel
 from ..models.oportunidad import Oportunidad
+from ..services.crm_service import actualizar_conciliado_crm_batch
 from datetime import datetime
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
@@ -616,9 +617,27 @@ def conciliar_propuesta(
         Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
     ).update({"conciliado": True}, synchronize_session="fetch")
 
+    # Actualizar en CRM: marcar CTRVentaConciliada_c = "N" para las 5 - Cerrada/Perdida
+    oportunidades_cerrada_perdida = db.query(Oportunidad.optyNumber).filter(
+        Oportunidad.idPropuesta == id_propuesta,
+        Oportunidad.eliminado == False,
+        Oportunidad.etapaVentaPropuesta == "5 - Cerrada/Perdida",
+        Oportunidad.optyNumber.isnot(None),
+    ).all()
+    opty_numbers_cerrada = [str(row[0]) for row in oportunidades_cerrada_perdida if row[0]]
+
     db.commit()
     db.refresh(propuesta)
-    
+
+    # Ejecutar PATCH al CRM en paralelo (después del commit para no bloquear la BD)
+    crm_stats = {"exitosos": 0, "errores": 0}
+    if opty_numbers_cerrada:
+        try:
+            crm_stats = actualizar_conciliado_crm_batch(opty_numbers_cerrada, conciliado=False)
+            print(f"[CRM] Actualizadas {crm_stats['exitosos']} oportunidades Cerrada/Perdida como no conciliadas. Errores: {crm_stats['errores']}")
+        except Exception as e:
+            print(f"[CRM] Error al actualizar oportunidades en CRM: {str(e)}")
+
     return {
         "msg": "Propuesta conciliada exitosamente",
         "idPropuesta": propuesta.id,
@@ -629,7 +648,8 @@ def conciliar_propuesta(
         "estadoNuevo": {
             "id": propuesta.estadoPropuesta_id,
             "nombre": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else "CONCILIADA"
-        }
+        },
+        "crm_actualizadas": crm_stats
     }
 
 

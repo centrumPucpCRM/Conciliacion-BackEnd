@@ -409,6 +409,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 monto = sanitize_float(row.get('oportunidad.monto', 0))
                 becado = sanitize_bool(row.get('oportunidad.becado', False))
                 partyNumber = sanitize_int(row.get('oportunidad.party_number', 0))
+                optyNumber = sanitize_str(row.get('oportunidad.opty_number', ''))
                 conciliado = sanitize_bool(row.get('oportunidad.conciliado', False))
                 posibleAtipico = bool(row.get('oportunidad.posibleAtipico', False))
                 idPrograma = programas_dict.get(programa_codigo).id if programa_codigo in programas_dict else None
@@ -431,6 +432,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     fechaMatricula=row.get('oportunidad.fecha_matricula'),
                     becado=becado,
                     partyNumber=partyNumber,
+                    optyNumber=optyNumber or None,
                     conciliado=conciliado,
                     idPropuesta=propuesta_id,
                     idPrograma=idPrograma,
