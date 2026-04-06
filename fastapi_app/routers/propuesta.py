@@ -195,13 +195,14 @@ def obtener_programas_conciliacion(
     es_proyectada = estado_nombre == "PROYECTADA"
 
     # Determinar roles del usuario actual (necesario tanto para CONCILIADA como para PROYECTADA)
-    es_jp = es_subdirector = es_director_comercial = False
+    es_jp = es_subdirector = es_director_comercial = es_daf = False
     if user_id:
         usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
         roles_usuario = {rol.nombre for rol in (usuario.roles if usuario and usuario.roles else [])}
         es_jp = "Comercial - Jefe de producto" in roles_usuario
         es_subdirector = "Comercial - Subdirector" in roles_usuario
         es_director_comercial = "Comercial - Director" in roles_usuario
+        es_daf = any(r.startswith("DAF") for r in roles_usuario)
 
     # Filtrar solicitudes_resumen según el rol:
     # - PROYECTADA: todos ven todas (modo solo lectura)
@@ -261,9 +262,9 @@ def obtener_programas_conciliacion(
             flags["verBotonProyectar"] = True
             flags["puedeProyectar"] = todas_aceptadas
 
-    # Subdirector puro y Director no pueden sincronizar programas
+    # Subdirector puro, Director y DAF no pueden sincronizar programas
     # (Subdirector que además es JP sí puede)
-    if (es_subdirector and not es_jp) or (es_director_comercial and not es_jp):
+    if (es_subdirector and not es_jp) or (es_director_comercial and not es_jp) or es_daf:
         flags["noActualizar"] = True
 
     if es_proyectada:
