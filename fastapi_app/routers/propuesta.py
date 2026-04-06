@@ -318,18 +318,16 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
             p.montoFijoFueraDeCounter = resultado["monto"]
 
             # Detectar retrocesos de etapa para este programa — marcar flag, NO cambiar etapa
-            etapas_crm = obtener_etapas_actuales_convertidos(p.codigo)
+            by_party, by_dni = obtener_etapas_actuales_convertidos(p.codigo)
             oportunidades_db = db.query(Oportunidad).filter(
                 Oportunidad.idPrograma == p.id,
                 Oportunidad.eliminado == False,
-                Oportunidad.partyNumber.isnot(None),
             ).all()
             retrocesos = 0
             for opp in oportunidades_db:
                 party = str(opp.partyNumber).strip() if opp.partyNumber else None
-                if not party:
-                    continue
-                etapa_crm = etapas_crm.get(party)
+                dni = str(opp.documentoIdentidad).strip() if opp.documentoIdentidad else None
+                etapa_crm = (party and by_party.get(party)) or (dni and by_dni.get(dni)) or ""
                 retrocedio = bool(etapa_crm and etapa_crm in _ETAPAS_RETROCESO)
                 if opp.retrocedioEnCRM != retrocedio:
                     opp.retrocedioEnCRM = retrocedio

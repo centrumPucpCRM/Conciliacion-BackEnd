@@ -58,18 +58,17 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
 
     # Detectar alumnos que retrocedieron de etapa en CRM — marcar flag, NO cambiar etapa
     _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
-    etapas_crm = obtener_etapas_actuales_convertidos(programa.codigo)
+    by_party, by_dni = obtener_etapas_actuales_convertidos(programa.codigo)
     oportunidades_db = db.query(Oportunidad).filter(
         Oportunidad.idPrograma == programa_id,
         Oportunidad.eliminado == False,
-        Oportunidad.partyNumber.isnot(None),
     ).all()
     retrocesos = 0
     for opp in oportunidades_db:
+        # Intentar match por partyNumber, fallback a DNI
         party = str(opp.partyNumber).strip() if opp.partyNumber else None
-        if not party:
-            continue
-        etapa_crm = etapas_crm.get(party)
+        dni = str(opp.documentoIdentidad).strip() if opp.documentoIdentidad else None
+        etapa_crm = (party and by_party.get(party)) or (dni and by_dni.get(dni)) or ""
         retrocedio = bool(etapa_crm and etapa_crm in _ETAPAS_RETROCESO)
         if opp.retrocedioEnCRM != retrocedio:
             opp.retrocedioEnCRM = retrocedio
