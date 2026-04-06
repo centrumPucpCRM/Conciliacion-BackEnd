@@ -114,8 +114,10 @@ def obtener_programas_conciliacion(
 
     def build_programa_item(p):
         oportunidades = oportunidades_por_programa.get(p.id, [])
-        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades)
-        count_opty = len(oportunidades)
+        # Retrocedidos no suman al monto/count real, pero sí al conciliado
+        oportunidades_activas = [o for o in oportunidades if not o.retrocedioEnCRM]
+        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades_activas)
+        count_opty = len(oportunidades_activas)
 
         alumnos = []
         for o in oportunidades:
@@ -133,6 +135,7 @@ def obtener_programas_conciliacion(
                 "becado": bool(o.becado),
                 "posibleAtipico": bool(o.posibleAtipico),
                 "conciliado": bool(o.conciliado),
+                "retrocedioEnCRM": bool(o.retrocedioEnCRM),
             })
 
         return {
@@ -314,7 +317,7 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
             p.fijoFueraDeCounter = resultado["count"]
             p.montoFijoFueraDeCounter = resultado["monto"]
 
-            # Detectar retrocesos de etapa para este programa
+            # Detectar retrocesos de etapa para este programa — marcar flag, NO cambiar etapa
             etapas_crm = obtener_etapas_actuales_convertidos(p.codigo)
             oportunidades_db = db.query(Oportunidad).filter(
                 Oportunidad.idPrograma == p.id,
@@ -327,9 +330,11 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
                 if not party:
                     continue
                 etapa_crm = etapas_crm.get(party)
-                if etapa_crm and etapa_crm in _ETAPAS_RETROCESO and opp.etapaVentaPropuesta != etapa_crm:
-                    opp.etapaVentaPropuesta = etapa_crm
-                    retrocesos += 1
+                retrocedio = bool(etapa_crm and etapa_crm in _ETAPAS_RETROCESO)
+                if opp.retrocedioEnCRM != retrocedio:
+                    opp.retrocedioEnCRM = retrocedio
+                    if retrocedio:
+                        retrocesos += 1
             total_retrocesos += retrocesos
 
             resultados.append({

@@ -31,4 +31,5 @@ class Oportunidad(Base):
     fechaMatriculaPropuesta = Column(Date)
     eliminado = Column(Boolean, default=False)
     vendedora = Column(String(255))#
+    retrocedioEnCRM = Column(Boolean, default=False)####
 

@@ -56,7 +56,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     programa.fijoFueraDeCounter = resultado["count"]
     programa.montoFijoFueraDeCounter = resultado["monto"]
 
-    # Detectar alumnos que retrocedieron de etapa en CRM y actualizar DB
+    # Detectar alumnos que retrocedieron de etapa en CRM — marcar flag, NO cambiar etapa
     _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
     etapas_crm = obtener_etapas_actuales_convertidos(programa.codigo)
     oportunidades_db = db.query(Oportunidad).filter(
@@ -70,9 +70,11 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         if not party:
             continue
         etapa_crm = etapas_crm.get(party)
-        if etapa_crm and etapa_crm in _ETAPAS_RETROCESO and opp.etapaVentaPropuesta != etapa_crm:
-            opp.etapaVentaPropuesta = etapa_crm
-            retrocesos += 1
+        retrocedio = bool(etapa_crm and etapa_crm in _ETAPAS_RETROCESO)
+        if opp.retrocedioEnCRM != retrocedio:
+            opp.retrocedioEnCRM = retrocedio
+            if retrocedio:
+                retrocesos += 1
 
     db.commit()
     db.refresh(programa)
