@@ -292,7 +292,7 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
     Consulta Oracle Sales Cloud y actualiza el conteo de 'Fijo fuera de counter'
     para todos los programas de una propuesta.
     """
-    from ..services.crm_service import obtener_fijos_fuera_counter
+    from ..services.crm_service import obtener_fijos_fuera_counter, obtener_etapas_actuales_convertidos
 
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     if not propuesta:
@@ -303,18 +303,40 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
         ProgramaModel.codigo.isnot(None),
     ).all()
 
+    _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
     resultados = []
     errores = 0
+    total_retrocesos = 0
 
     for p in programas:
         try:
             resultado = obtener_fijos_fuera_counter(p.codigo)
             p.fijoFueraDeCounter = resultado["count"]
             p.montoFijoFueraDeCounter = resultado["monto"]
+
+            # Detectar retrocesos de etapa para este programa
+            etapas_crm = obtener_etapas_actuales_convertidos(p.codigo)
+            oportunidades_db = db.query(Oportunidad).filter(
+                Oportunidad.idPrograma == p.id,
+                Oportunidad.eliminado == False,
+                Oportunidad.partyNumber.isnot(None),
+            ).all()
+            retrocesos = 0
+            for opp in oportunidades_db:
+                party = str(opp.partyNumber).strip() if opp.partyNumber else None
+                if not party:
+                    continue
+                etapa_crm = etapas_crm.get(party)
+                if etapa_crm and etapa_crm in _ETAPAS_RETROCESO and opp.etapaVentaPropuesta != etapa_crm:
+                    opp.etapaVentaPropuesta = etapa_crm
+                    retrocesos += 1
+            total_retrocesos += retrocesos
+
             resultados.append({
                 "idPrograma": p.id,
                 "fijoFueraDeCounter": resultado["count"],
                 "montoFijoFueraDeCounter": resultado["monto"],
+                "retrocesos_actualizados": retrocesos,
             })
         except Exception as e:
             errores += 1
@@ -325,6 +347,7 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
     return {
         "actualizados": len(resultados) - errores,
         "errores": errores,
+        "retrocesos_actualizados": total_retrocesos,
         "resultados": resultados,
     }
 

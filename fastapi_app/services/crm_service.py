@@ -208,6 +208,26 @@ def obtener_alumnos_ultimo_momento(codigo_crm: str) -> List[Dict[str, Any]]:
     ]
 
 
+def obtener_etapas_actuales_convertidos(codigo_crm: str) -> Dict[str, str]:
+    """
+    Retorna {partyNumber: etapa_crm} para todos los leads CONVERTED del programa.
+    Usado durante el sync para detectar alumnos que retrocedieron de etapa en CRM.
+    """
+    url = f"{BASE}/leads"
+    items = _get_all_items(url, {
+        "onlyData": "true",
+        "q": f"CTRProductoAsociado_Id_c={codigo_crm};StatusCode=CONVERTED",
+        "fields": "AccountPartyNumber,CTRFannelDataEstudioEtapaOpty_c",
+    })
+    result = {}
+    for i in items:
+        party = str(i.get("AccountPartyNumber") or "").strip()
+        etapa = (i.get("CTRFannelDataEstudioEtapaOpty_c") or "").strip()
+        if party:
+            result[party] = etapa
+    return result
+
+
 def leer_oportunidades_por_account(party: int) -> List[Dict[str, Any]]:
     """Lee las oportunidades asociadas a un account party."""
     url = f"{BASE}/opportunities"

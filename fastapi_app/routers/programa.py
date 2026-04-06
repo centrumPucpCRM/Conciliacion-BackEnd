@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models.programa import Programa
-from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter, obtener_alumnos_ultimo_momento
+from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter, obtener_alumnos_ultimo_momento, obtener_etapas_actuales_convertidos
 from ..models.oportunidad import Oportunidad
 
 router = APIRouter(prefix="/programa", tags=["Programa"])
@@ -55,6 +55,25 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     resultado = obtener_fijos_fuera_counter(programa.codigo)
     programa.fijoFueraDeCounter = resultado["count"]
     programa.montoFijoFueraDeCounter = resultado["monto"]
+
+    # Detectar alumnos que retrocedieron de etapa en CRM y actualizar DB
+    _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
+    etapas_crm = obtener_etapas_actuales_convertidos(programa.codigo)
+    oportunidades_db = db.query(Oportunidad).filter(
+        Oportunidad.idPrograma == programa_id,
+        Oportunidad.eliminado == False,
+        Oportunidad.partyNumber.isnot(None),
+    ).all()
+    retrocesos = 0
+    for opp in oportunidades_db:
+        party = str(opp.partyNumber).strip() if opp.partyNumber else None
+        if not party:
+            continue
+        etapa_crm = etapas_crm.get(party)
+        if etapa_crm and etapa_crm in _ETAPAS_RETROCESO and opp.etapaVentaPropuesta != etapa_crm:
+            opp.etapaVentaPropuesta = etapa_crm
+            retrocesos += 1
+
     db.commit()
     db.refresh(programa)
 
@@ -62,6 +81,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         "idPrograma": programa_id,
         "fijoFueraDeCounter": resultado["count"],
         "montoFijoFueraDeCounter": resultado["monto"],
+        "retrocesos_actualizados": retrocesos,
     }
 
 
