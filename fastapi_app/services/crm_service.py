@@ -24,7 +24,7 @@ HEADERS = {
 DEFAULT_FIELDS_OPTY = (
     "OptyNumber,CTRCodigoDeProgramaCRM_c,CTRPorctDescVentas_c,Revenue,CTRVentaConciliada_c,"
     "CTRPrecioLista_c,CTRMoneda_c,CTRFMatricula_c,CTRInstanteCerradaGamada_c,"
-    "CreationDate,OwnerPartyNumber"
+    "CreationDate,OwnerPartyNumber,CTRFechaDeUltimaConciliacion_c,CTRRegistroDeVentaConciliada_c"
 )
 DEFAULT_FIELDS_CONTACT = (
     "ContactName,PersonDEO_CTRNrodedocumento_c,EmailAddress,OverallPrimaryFormattedPhoneNumber"
@@ -626,6 +626,65 @@ def actualizar_conciliado_crm_batch(opty_numbers: List[str], conciliado: bool) -
                 estadisticas["exitosos"] += 1
             except Exception as e:
                 print(f"Error actualizando opty {opty}: {str(e)}")
+                estadisticas["errores"] += 1
+
+    return estadisticas
+
+
+def marcar_conciliada_crm(opty_number: str, fecha_conciliacion: str, ya_tiene_registro: bool) -> Dict[str, Any]:
+    """
+    Marca una oportunidad como conciliada en CRM actualizando los 3 campos:
+    - CTRVentaConciliada_c = "Y" (transaccional)
+    - CTRFechaDeUltimaConciliacion_c = fecha actual (siempre se actualiza)
+    - CTRRegistroDeVentaConciliada_c = "Y" (solo si aún no tenía valor — inmutable)
+    """
+    url = f"{BASE}/opportunities/{opty_number}"
+    session = get_session()
+    params = {"onlyData": "true"}
+    payload: Dict[str, Any] = {
+        "CTRVentaConciliada_c": "Y",
+        "CTRFechaDeUltimaConciliacion_c": fecha_conciliacion,
+    }
+    if not ya_tiene_registro:
+        payload["CTRRegistroDeVentaConciliada_c"] = "Y"
+
+    try:
+        res = session.patch(url, json=payload, params=params, timeout=15)
+        res.raise_for_status()
+        return res.json()
+    except requests.exceptions.RequestException as e:
+        print(f"Error marcando conciliada opty {opty_number} en CRM: {str(e)}")
+        raise
+
+
+def marcar_conciliada_crm_batch(opty_data: List[Dict]) -> Dict[str, Any]:
+    """
+    Marca múltiples oportunidades como conciliadas en CRM en paralelo.
+    opty_data: lista de dicts con keys: opty_number, fecha_conciliacion, ya_tiene_registro
+    """
+    if not opty_data:
+        return {"exitosos": 0, "errores": 0}
+
+    estadisticas = {"exitosos": 0, "errores": 0}
+    max_workers = min(len(opty_data), 20)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                marcar_conciliada_crm,
+                item["opty_number"],
+                item["fecha_conciliacion"],
+                item["ya_tiene_registro"],
+            ): item["opty_number"]
+            for item in opty_data
+        }
+        for future in as_completed(futures):
+            opty = futures[future]
+            try:
+                future.result()
+                estadisticas["exitosos"] += 1
+            except Exception as e:
+                print(f"Error marcando conciliada opty {opty}: {str(e)}")
                 estadisticas["errores"] += 1
 
     return estadisticas

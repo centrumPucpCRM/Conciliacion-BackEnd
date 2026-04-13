@@ -412,6 +412,14 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 optyNumber = sanitize_str(row.get('oportunidad.opty_number', ''))
                 conciliado = sanitize_bool(row.get('oportunidad.conciliado', False))
                 posibleAtipico = bool(row.get('oportunidad.posibleAtipico', False))
+                ctr_fecha_raw = row.get('oportunidad.CTRFechaDeUltimaConciliacion_c')
+                ctr_fecha = None
+                if pd.notna(ctr_fecha_raw) and ctr_fecha_raw:
+                    try:
+                        ctr_fecha = pd.to_datetime(ctr_fecha_raw).date()
+                    except Exception:
+                        ctr_fecha = None
+                ctr_registro = sanitize_str(row.get('oportunidad.CTRRegistroDeVentaConciliada', '')) or None
                 idPrograma = programas_dict.get(programa_codigo).id if programa_codigo in programas_dict else None
                 
                 # Marcar automáticamente como becado si:
@@ -442,7 +450,9 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     etapaVentaPropuesta=etapaDeVentas,
                     fechaMatriculaPropuesta=row.get('oportunidad.fecha_matricula'),
                     posibleAtipico=posibleAtipico,
-                    vendedora=row.get('oportunidad.vendedora')
+                    vendedora=row.get('oportunidad.vendedora'),
+                    CTRFechaDeUltimaConciliacion_c=ctr_fecha,
+                    CTRRegistroDeVentaConciliada_c=ctr_registro,
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad

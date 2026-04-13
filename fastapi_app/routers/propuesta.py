@@ -14,7 +14,7 @@ from ..schemas.propuesta import PropuestaListadoPage
 from ..services.propuesta_filter_service import PropuestaFilterService
 from ..models.programa import Programa as ProgramaModel
 from ..models.oportunidad import Oportunidad
-from ..services.crm_service import actualizar_conciliado_crm_batch
+from ..services.crm_service import actualizar_conciliado_crm_batch, marcar_conciliada_crm_batch
 from datetime import datetime
 
 router = APIRouter(prefix="/propuesta", tags=["Propuesta"])
@@ -636,15 +636,35 @@ def conciliar_propuesta(
     # Cambiar estado a CONCILIADA
     propuesta.estadoPropuesta_id = estado_conciliada.id
 
+    from datetime import date as _date
+    fecha_conciliacion = _date.today().isoformat()
+
     # Marcar como conciliadas las oportunidades válidas de esta propuesta
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
-    db.query(Oportunidad).filter(
+    oportunidades_validas = db.query(Oportunidad).filter(
         Oportunidad.idPropuesta == id_propuesta,
         Oportunidad.eliminado == False,
         Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
-    ).update({"conciliado": True}, synchronize_session="fetch")
+    ).all()
 
-    # Actualizar en CRM: marcar CTRVentaConciliada_c = "N" para las 5 - Cerrada/Perdida
+    for opp in oportunidades_validas:
+        opp.conciliado = True
+        opp.CTRFechaDeUltimaConciliacion_c = _date.today()
+        if not opp.CTRRegistroDeVentaConciliada_c:
+            opp.CTRRegistroDeVentaConciliada_c = "Y"
+
+    # Recopilar datos para actualizar en CRM (optyNumbers válidos)
+    opty_data_validas = [
+        {
+            "opty_number": str(opp.optyNumber),
+            "fecha_conciliacion": fecha_conciliacion,
+            "ya_tiene_registro": bool(opp.CTRRegistroDeVentaConciliada_c and opp.CTRRegistroDeVentaConciliada_c != "Y"),
+        }
+        for opp in oportunidades_validas
+        if opp.optyNumber
+    ]
+
+    # Recopilar optyNumbers de Cerrada/Perdida para marcar como N
     oportunidades_cerrada_perdida = db.query(Oportunidad.optyNumber).filter(
         Oportunidad.idPropuesta == id_propuesta,
         Oportunidad.eliminado == False,
@@ -656,14 +676,28 @@ def conciliar_propuesta(
     db.commit()
     db.refresh(propuesta)
 
-    # Ejecutar PATCH al CRM en paralelo (después del commit para no bloquear la BD)
-    crm_stats = {"exitosos": 0, "errores": 0}
+    # Ejecutar PATCHes al CRM en paralelo (después del commit para no bloquear la BD)
+    crm_stats_validas = {"exitosos": 0, "errores": 0}
+    crm_stats_cerrada = {"exitosos": 0, "errores": 0}
+
+    if opty_data_validas:
+        try:
+            crm_stats_validas = marcar_conciliada_crm_batch(opty_data_validas)
+            print(f"[CRM] Marcadas conciliadas: {crm_stats_validas['exitosos']} OK, {crm_stats_validas['errores']} errores")
+        except Exception as e:
+            print(f"[CRM] Error marcando conciliadas en CRM: {str(e)}")
+
     if opty_numbers_cerrada:
         try:
-            crm_stats = actualizar_conciliado_crm_batch(opty_numbers_cerrada, conciliado=False)
-            print(f"[CRM] Actualizadas {crm_stats['exitosos']} oportunidades Cerrada/Perdida como no conciliadas. Errores: {crm_stats['errores']}")
+            crm_stats_cerrada = actualizar_conciliado_crm_batch(opty_numbers_cerrada, conciliado=False)
+            print(f"[CRM] Cerrada/Perdida → N: {crm_stats_cerrada['exitosos']} OK, {crm_stats_cerrada['errores']} errores")
         except Exception as e:
-            print(f"[CRM] Error al actualizar oportunidades en CRM: {str(e)}")
+            print(f"[CRM] Error al actualizar Cerrada/Perdida en CRM: {str(e)}")
+
+    crm_stats = {
+        "conciliadas": crm_stats_validas,
+        "cerrada_perdida": crm_stats_cerrada,
+    }
 
     return {
         "msg": "Propuesta conciliada exitosamente",
