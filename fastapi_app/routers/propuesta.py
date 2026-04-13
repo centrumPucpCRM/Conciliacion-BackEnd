@@ -686,10 +686,37 @@ def conciliar_propuesta(
     from datetime import date as _date
     fecha_conciliacion = _date.today().isoformat()
 
-    # Marcar como conciliadas las oportunidades válidas de esta propuesta
+    # Calcular rango de fechas en scope (mismo criterio que la vista de conciliación)
+    fp = propuesta.fechaPropuesta
+    mes_conc = fp.month - 1 if fp.month > 1 else 12
+    anio_conc = fp.year if fp.month > 1 else fp.year - 1
+    meses_scope = [(mes_conc, anio_conc)]
+    for offset in [2, 3, 4]:
+        m = fp.month - offset
+        a = fp.year
+        while m <= 0:
+            m += 12
+            a -= 1
+        meses_scope.append((m, a))
+
+    # IDs de programas en scope (mes conciliado + 3 meses anteriores)
+    programas_scope = db.query(ProgramaModel).filter(
+        ProgramaModel.idPropuesta == id_propuesta
+    ).all()
+    ids_programas_scope = {
+        p.id for p in programas_scope
+        if p.fechaInaguracionPropuesta
+        and any(
+            p.fechaInaguracionPropuesta.month == m and p.fechaInaguracionPropuesta.year == a
+            for m, a in meses_scope
+        )
+    }
+
+    # Marcar como conciliadas solo las oportunidades de programas en scope
     etapas_excluir = ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida", "Agregado CRM"]
     oportunidades_validas = db.query(Oportunidad).filter(
         Oportunidad.idPropuesta == id_propuesta,
+        Oportunidad.idPrograma.in_(ids_programas_scope),
         Oportunidad.eliminado == False,
         Oportunidad.etapaVentaPropuesta.notin_(etapas_excluir),
     ).all()
@@ -711,9 +738,10 @@ def conciliar_propuesta(
         if opp.optyNumber
     ]
 
-    # Recopilar optyNumbers de Cerrada/Perdida para marcar como N
+    # Recopilar optyNumbers de Cerrada/Perdida en scope para marcar como N
     oportunidades_cerrada_perdida = db.query(Oportunidad.optyNumber).filter(
         Oportunidad.idPropuesta == id_propuesta,
+        Oportunidad.idPrograma.in_(ids_programas_scope),
         Oportunidad.eliminado == False,
         Oportunidad.etapaVentaPropuesta == "5 - Cerrada/Perdida",
         Oportunidad.optyNumber.isnot(None),
