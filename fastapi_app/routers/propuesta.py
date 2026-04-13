@@ -738,15 +738,17 @@ def conciliar_propuesta(
         if opp.optyNumber
     ]
 
-    # Recopilar optyNumbers de Cerrada/Perdida en scope para marcar como N
-    oportunidades_cerrada_perdida = db.query(Oportunidad.optyNumber).filter(
+    # Recopilar optyNumbers a marcar como N: Cerrada/Perdida + descartados
+    oportunidades_n = db.query(Oportunidad.optyNumber).filter(
         Oportunidad.idPropuesta == id_propuesta,
         Oportunidad.idPrograma.in_(ids_programas_scope),
-        Oportunidad.eliminado == False,
-        Oportunidad.etapaVentaPropuesta == "5 - Cerrada/Perdida",
         Oportunidad.optyNumber.isnot(None),
+        or_(
+            Oportunidad.etapaVentaPropuesta == "5 - Cerrada/Perdida",
+            Oportunidad.eliminado == True,
+        )
     ).all()
-    opty_numbers_cerrada = [str(row[0]) for row in oportunidades_cerrada_perdida if row[0]]
+    opty_numbers_cerrada = [str(row[0]) for row in oportunidades_n if row[0]]
 
     db.commit()
     db.refresh(propuesta)
