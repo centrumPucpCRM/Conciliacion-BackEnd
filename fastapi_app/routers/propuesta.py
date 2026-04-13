@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, Body
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, HTTPException, Body
 from sqlalchemy.orm import Session
+from typing import Dict
 from sqlalchemy.orm import load_only, selectinload
 from sqlalchemy import or_
 from typing import List, Optional
@@ -590,8 +591,54 @@ def cancelar_propuesta(
     }
 
 
+# Progress tracker para sync CRM en background (por propuesta_id)
+_crm_progress: Dict[int, dict] = {}
+
+
+def _sync_crm_background(propuesta_id: int, opty_data_validas: list, opty_numbers_cerrada: list):
+    """Ejecuta los PATCHes al CRM en background y actualiza el progreso."""
+    total = len(opty_data_validas) + len(opty_numbers_cerrada)
+    _crm_progress[propuesta_id] = {"total": total, "done": 0, "errors": 0, "finished": False}
+
+    from ..services.crm_service import marcar_conciliada_crm, actualizar_conciliado_crm
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    tasks = (
+        [("valida", item) for item in opty_data_validas] +
+        [("cerrada", opty) for opty in opty_numbers_cerrada]
+    )
+
+    def run_one(task):
+        kind, data = task
+        if kind == "valida":
+            marcar_conciliada_crm(data["opty_number"], data["fecha_conciliacion"], data["ya_tiene_registro"])
+        else:
+            actualizar_conciliado_crm(data, conciliado=False)
+
+    max_workers = min(len(tasks), 20) if tasks else 1
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(run_one, t): t for t in tasks}
+        for future in as_completed(futures):
+            try:
+                future.result()
+                _crm_progress[propuesta_id]["done"] += 1
+            except Exception as e:
+                _crm_progress[propuesta_id]["errors"] += 1
+                print(f"[CRM BG] Error: {e}")
+
+    _crm_progress[propuesta_id]["finished"] = True
+    print(f"[CRM BG] Propuesta {propuesta_id}: {_crm_progress[propuesta_id]}")
+
+
+@router.get("/{propuesta_id}/crm-sync-progress")
+def get_crm_sync_progress(propuesta_id: int):
+    """Retorna el progreso del sync CRM en background para una propuesta."""
+    return _crm_progress.get(propuesta_id, {"total": 0, "done": 0, "errors": 0, "finished": True})
+
+
 @router.patch("/conciliar")
 def conciliar_propuesta(
+    background_tasks: BackgroundTasks,
     body: dict = Body(
         ...,
         example={
@@ -658,7 +705,7 @@ def conciliar_propuesta(
         {
             "opty_number": str(opp.optyNumber),
             "fecha_conciliacion": fecha_conciliacion,
-            "ya_tiene_registro": bool(opp.CTRRegistroDeVentaConciliada_c and opp.CTRRegistroDeVentaConciliada_c != "Y"),
+            "ya_tiene_registro": bool(opp.CTRRegistroDeVentaConciliada_c),
         }
         for opp in oportunidades_validas
         if opp.optyNumber
@@ -676,32 +723,14 @@ def conciliar_propuesta(
     db.commit()
     db.refresh(propuesta)
 
-    # Ejecutar PATCHes al CRM en paralelo (después del commit para no bloquear la BD)
-    crm_stats_validas = {"exitosos": 0, "errores": 0}
-    crm_stats_cerrada = {"exitosos": 0, "errores": 0}
-
-    if opty_data_validas:
-        try:
-            crm_stats_validas = marcar_conciliada_crm_batch(opty_data_validas)
-            print(f"[CRM] Marcadas conciliadas: {crm_stats_validas['exitosos']} OK, {crm_stats_validas['errores']} errores")
-        except Exception as e:
-            print(f"[CRM] Error marcando conciliadas en CRM: {str(e)}")
-
-    if opty_numbers_cerrada:
-        try:
-            crm_stats_cerrada = actualizar_conciliado_crm_batch(opty_numbers_cerrada, conciliado=False)
-            print(f"[CRM] Cerrada/Perdida → N: {crm_stats_cerrada['exitosos']} OK, {crm_stats_cerrada['errores']} errores")
-        except Exception as e:
-            print(f"[CRM] Error al actualizar Cerrada/Perdida en CRM: {str(e)}")
-
-    crm_stats = {
-        "conciliadas": crm_stats_validas,
-        "cerrada_perdida": crm_stats_cerrada,
-    }
+    # Lanzar sync CRM en background (no bloquea la respuesta)
+    total_crm = len(opty_data_validas) + len(opty_numbers_cerrada)
+    background_tasks.add_task(_sync_crm_background, id_propuesta, opty_data_validas, opty_numbers_cerrada)
 
     return {
         "msg": "Propuesta conciliada exitosamente",
         "idPropuesta": propuesta.id,
+        "total_crm": total_crm,
         "estadoAnterior": {
             "id": estado_anterior_id,
             "nombre": estado_anterior_nombre
@@ -710,7 +739,6 @@ def conciliar_propuesta(
             "id": propuesta.estadoPropuesta_id,
             "nombre": propuesta.estadoPropuesta.nombre if propuesta.estadoPropuesta else "CONCILIADA"
         },
-        "crm_actualizadas": crm_stats
     }
 
 
