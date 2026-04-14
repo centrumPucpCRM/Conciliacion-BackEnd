@@ -43,8 +43,10 @@ def anexar_comentario_programa(
 @router.post("/{programa_id}/sync-fijo-fuera-counter")
 def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     """
-    Consulta Oracle Sales Cloud y actualiza el conteo de 'Fijo fuera de counter'
-    (leads con Rank=HOT y StatusCode=QUALIFIED) para un programa específico.
+    Consulta Oracle Sales Cloud y:
+    1. Actualiza FFC (Fijo fuera de counter)
+    2. Detecta retrocesos de etapa y marca retrocedioEnCRM
+    3. Persiste alumnos nuevos (Matrícula / Cerrada-Ganada) como oportunidades con agregadoUltimoMomento=True
     """
     programa = db.query(Programa).filter(Programa.id == programa_id).first()
     if not programa:
@@ -52,11 +54,12 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     if not programa.codigo:
         raise HTTPException(status_code=400, detail="El programa no tiene código CRM")
 
+    # 1. Actualizar FFC
     resultado = obtener_fijos_fuera_counter(programa.codigo)
     programa.fijoFueraDeCounter = resultado["count"]
     programa.montoFijoFueraDeCounter = resultado["monto"]
 
-    # Detectar alumnos que retrocedieron de etapa en CRM — marcar flag, NO cambiar etapa
+    # 2. Detectar retrocesos — marcar flag, NO cambiar etapa
     _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
     by_party, by_dni = obtener_etapas_actuales_convertidos(programa.codigo)
     oportunidades_db = db.query(Oportunidad).filter(
@@ -65,7 +68,6 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     ).all()
     retrocesos = 0
     for opp in oportunidades_db:
-        # Intentar match por partyNumber, fallback a DNI
         party = str(opp.partyNumber).strip() if opp.partyNumber else None
         dni = str(opp.documentoIdentidad).strip() if opp.documentoIdentidad else None
         etapa_crm = (party and by_party.get(party)) or (dni and by_dni.get(dni)) or ""
@@ -75,6 +77,46 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
             if retrocedio:
                 retrocesos += 1
 
+    # 3. Persistir alumnos de último momento (Matrícula / Cerrada-Ganada) nuevos en CRM
+    party_numbers_existentes = {
+        str(o.partyNumber).strip()
+        for o in oportunidades_db
+        if o.partyNumber
+    }
+    leads_ultimo_momento = obtener_alumnos_ultimo_momento(programa.codigo)
+    nuevos_agregados = 0
+    for lead in leads_ultimo_momento:
+        party_crm = str(lead.get("partyNumber") or "").strip()
+        if not party_crm or party_crm in party_numbers_existentes:
+            continue
+        descuento = lead.get("descuento")
+        monto = float(lead.get("monto") or 0)
+        nueva_opp = Oportunidad(
+            nombre=lead.get("nombre"),
+            documentoIdentidad=lead.get("dni"),
+            partyNumber=int(party_crm) if party_crm.isdigit() else None,
+            optyNumber=lead.get("leadNumber"),
+            monto=monto,
+            montoPropuesto=monto,
+            descuento=float(descuento) if descuento is not None else 0.0,
+            descuentoPropuesto=float(descuento) if descuento is not None else 0.0,
+            moneda=lead.get("moneda"),
+            etapaDeVentas=lead.get("etapa"),
+            etapaVentaPropuesta=lead.get("etapa"),
+            vendedora=lead.get("vendedor"),
+            idPrograma=programa_id,
+            idPropuesta=programa.idPropuesta,
+            conciliado=False,
+            becado=False,
+            posibleAtipico=False,
+            eliminado=False,
+            retrocedioEnCRM=False,
+            agregadoUltimoMomento=True,
+        )
+        db.add(nueva_opp)
+        party_numbers_existentes.add(party_crm)
+        nuevos_agregados += 1
+
     db.commit()
     db.refresh(programa)
 
@@ -83,6 +125,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         "fijoFueraDeCounter": resultado["count"],
         "montoFijoFueraDeCounter": resultado["monto"],
         "retrocesos_actualizados": retrocesos,
+        "nuevos_ultimo_momento": nuevos_agregados,
     }
 
 

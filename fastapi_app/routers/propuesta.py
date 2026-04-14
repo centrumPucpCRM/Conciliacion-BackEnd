@@ -137,6 +137,7 @@ def obtener_programas_conciliacion(
                 "posibleAtipico": bool(o.posibleAtipico),
                 "conciliado": bool(o.conciliado),
                 "retrocedioEnCRM": bool(o.retrocedioEnCRM),
+                "agregadoUltimoMomento": bool(o.agregadoUltimoMomento),
             })
 
         return {

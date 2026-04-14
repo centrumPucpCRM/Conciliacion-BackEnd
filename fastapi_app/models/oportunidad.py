@@ -32,6 +32,7 @@ class Oportunidad(Base):
     eliminado = Column(Boolean, default=False)
     vendedora = Column(String(255))#
     retrocedioEnCRM = Column(Boolean, default=False)####
+    agregadoUltimoMomento = Column(Boolean, default=False)
     CTRFechaDeUltimaConciliacion_c = Column(Date)####
     CTRRegistroDeVentaConciliada_c = Column(String(10))####
 
