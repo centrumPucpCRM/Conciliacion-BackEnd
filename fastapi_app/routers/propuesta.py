@@ -117,7 +117,8 @@ def obtener_programas_conciliacion(
         oportunidades = oportunidades_por_programa.get(p.id, [])
         # Retrocedidos no suman al monto/count real, pero sí al conciliado
         oportunidades_activas = [o for o in oportunidades if not o.retrocedioEnCRM]
-        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades_activas)
+        oportunidades_conciliadas = [o for o in oportunidades_activas if not o.agregadoUltimoMomento]
+        monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades_conciliadas)
         monto_actual = sum(o.monto or 0 for o in oportunidades_activas)
         count_opty = len(oportunidades_activas)
 
