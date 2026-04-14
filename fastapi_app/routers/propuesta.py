@@ -118,6 +118,7 @@ def obtener_programas_conciliacion(
         # Retrocedidos no suman al monto/count real, pero sí al conciliado
         oportunidades_activas = [o for o in oportunidades if not o.retrocedioEnCRM]
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades_activas)
+        monto_actual = sum(o.monto or 0 for o in oportunidades_activas)
         count_opty = len(oportunidades_activas)
 
         alumnos = []
@@ -152,6 +153,7 @@ def obtener_programas_conciliacion(
             "metaDeAlumnos": p.metaDeAlumnos,
             "alumnosReales": count_opty,
             "montoReal": monto_opty,
+            "montoActual": monto_actual,
             "enRiesgo": bool(p.enRiesgo),
             "comentario": p.comentario,
             "fijoFueraDeCounter": p.fijoFueraDeCounter or 0,
