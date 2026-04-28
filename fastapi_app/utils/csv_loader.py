@@ -410,6 +410,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 becado = sanitize_bool(row.get('oportunidad.becado', False))
                 partyNumber = sanitize_int(row.get('oportunidad.party_number', 0))
                 optyNumber = sanitize_str(row.get('oportunidad.opty_number', ''))
+                optyId = sanitize_str(row.get('oportunidad.opty_id', ''))
                 conciliado = sanitize_bool(row.get('oportunidad.conciliado', False))
                 posibleAtipico = bool(row.get('oportunidad.posibleAtipico', False))
                 ctr_fecha_raw = row.get('oportunidad.CTRFechaDeUltimaConciliacion_c')
@@ -441,6 +442,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     becado=becado,
                     partyNumber=partyNumber,
                     optyNumber=optyNumber or None,
+                    optyId=optyId or None,
                     conciliado=conciliado,
                     idPropuesta=propuesta_id,
                     idPrograma=idPrograma,
