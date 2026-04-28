@@ -140,6 +140,8 @@ def obtener_programas_conciliacion(
                 "conciliado": bool(o.conciliado),
                 "retrocedioEnCRM": bool(o.retrocedioEnCRM),
                 "agregadoUltimoMomento": bool(o.agregadoUltimoMomento),
+                "optyNumber": o.optyNumber,
+                "optyId": o.optyId,
             })
 
         return {
