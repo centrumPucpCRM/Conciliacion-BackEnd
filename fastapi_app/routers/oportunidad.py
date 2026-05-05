@@ -263,7 +263,7 @@ def listar_oportunidades_disponibles_crm(
         
         # Ejecutar sincronización automáticamente
         try:
-            estadisticas = sincronizar_oportunidades_crm(db, str(programa.codigo))
+            estadisticas = sincronizar_oportunidades_crm(db, programa.id)
             
             # Respuesta simplificada
             if estadisticas['nuevas_insertadas'] == 0:

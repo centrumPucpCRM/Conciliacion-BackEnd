@@ -481,23 +481,28 @@ def _obtener_tipo_cambio_por_moneda_fecha(db: Session, moneda: str, fecha: date)
     return tipo_cambio.id if tipo_cambio else None
 
 
-def sincronizar_oportunidades_crm(db: Session, codigo_crm: str) -> Dict[str, Any]:
+def sincronizar_oportunidades_crm(db: Session, programa_id: int) -> Dict[str, Any]:
     """
     Sincroniza las oportunidades del CRM con la base de datos.
-    
+
     Args:
         db: Sesión de base de datos
-        codigo_crm: Código CRM del programa
-        
+        programa_id: ID del programa (PK en la tabla `programa`)
+
     Returns:
         Diccionario con estadísticas de la sincronización
     """
     try:
-        # Obtener el programa por código CRM
-        programa = db.query(Programa).filter(Programa.codigo == codigo_crm).first()
+        # Obtener el programa por ID (no por código, porque el código se repite
+        # entre filas de programa de distintas propuestas).
+        programa = db.query(Programa).filter(Programa.id == programa_id).first()
         if not programa:
-            raise Exception(f"No se encontró programa con código CRM: {codigo_crm}")
-        
+            raise Exception(f"No se encontró programa con id: {programa_id}")
+        if not programa.codigo:
+            raise Exception(f"El programa {programa_id} no tiene código CRM asociado")
+
+        codigo_crm = str(programa.codigo)
+
         # Obtener oportunidades del CRM
         oportunidades_crm = obtener_oportunidades_desde_leads(codigo_crm)
         
