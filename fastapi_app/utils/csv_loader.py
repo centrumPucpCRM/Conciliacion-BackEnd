@@ -428,6 +428,9 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                 # - El descuento es mayor a 0.99 (99%)
                 if monto < 10 or descuento > 0.99:
                     becado = True
+
+                # Si es becado, marcar como eliminado de inmediato
+                eliminado = bool(becado)
                 
                 oportunidad = Oportunidad(
                     nombre=oportunidad_nombre,
@@ -455,6 +458,7 @@ def cargar_oportunidades(db, df, propuesta_unica, programas_dict):
                     vendedora=row.get('oportunidad.vendedora'),
                     CTRFechaDeUltimaConciliacion_c=ctr_fecha,
                     CTRRegistroDeVentaConciliada_c=ctr_registro,
+                    eliminado=eliminado,
                 )
                 oportunidades_bulk.append(oportunidad)
                 oportunidades_dict[oportunidad_nombre] = oportunidad
