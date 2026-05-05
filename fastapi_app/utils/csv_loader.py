@@ -542,16 +542,33 @@ def crear_solicitudes_subdirectores(db, propuesta_unica, df: pd.DataFrame):
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
     
-    # Obtener dinámicamente todos los usuarios con rol "Comercial - Subdirector"
+    # Obtener dinámicamente solo subdirectores presentes en el DF filtrado
     rol_subdirector = db.query(Rol).filter(Rol.nombre == "Comercial - Subdirector").first()
     if not rol_subdirector:
-        print(f"[WARNING] Rol 'Comercial - Subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
+        print("[WARNING] Rol 'Comercial - Subdirector' no encontrado. Saltando creación de solicitudes de subdirectores.")
         return
-    
-    subdirectores = db.query(Usuario).join(Usuario.roles).filter(Rol.id == rol_subdirector.id).all()
-    
+
+    if 'usuario.nombreSubdirector' not in df_filtrado.columns:
+        print("[WARNING] Columna 'usuario.nombreSubdirector' no encontrada. Saltando creación de solicitudes de subdirectores.")
+        return
+
+    subdirector_nombres = [
+        str(nombre).strip()
+        for nombre in df_filtrado['usuario.nombreSubdirector'].dropna().unique()
+        if str(nombre).strip()
+    ]
+
+    if not subdirector_nombres:
+        print("[INFO] No hay subdirectores en el DF filtrado. Saltando creación de solicitudes.")
+        return
+
+    subdirectores = db.query(Usuario).join(Usuario.roles).filter(
+        Rol.id == rol_subdirector.id,
+        Usuario.nombre.in_(subdirector_nombres)
+    ).all()
+
     if not subdirectores:
-        print(f"[WARNING] No se encontraron usuarios con rol 'Comercial - Subdirector'. Saltando creación de solicitudes.")
+        print("[WARNING] No se encontraron usuarios con rol 'Comercial - Subdirector' en el DF filtrado. Saltando creación de solicitudes.")
         return
     
     # Verificar que existen programas con meses válidos en esta propuesta
