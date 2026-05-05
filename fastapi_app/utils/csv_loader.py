@@ -493,18 +493,20 @@ def cargar_tipo_cambio(db):
 def obtener_meses_validos():
     """
     Calcula los meses válidos basados en la fecha actual de Perú.
-    Retorna una lista con los 4 meses anteriores al mes actual (excluye el mes actual).
-    Ejemplo: si hoy es 2026-07-05 -> ["04", "03", "02", "01"].
+    Retorna una lista con los 4 meses anteriores al mes actual (excluye el mes actual),
+    considerando año y mes. Ejemplo: si hoy es 2026-02-05 -> ["2026-01", "2025-12", "2025-11", "2025-10"].
     """
     peru_tz = pytz.timezone('America/Lima')
     fecha_actual = datetime.datetime.now(peru_tz)
 
     meses_validos = []
-    for i in range(3, 7):
-        mes = fecha_actual.month - i
-        if mes <= 0:
-            mes += 12
-        meses_validos.append(f"{mes:02d}")
+    for offset in range(1, 5):
+        year = fecha_actual.year
+        month = fecha_actual.month - offset
+        if month <= 0:
+            month += 12
+            year -= 1
+        meses_validos.append(f"{year:04d}-{month:02d}")
 
     return meses_validos
 
@@ -515,7 +517,7 @@ def filtrar_df_por_meses_inauguracion(df: pd.DataFrame, meses_validos: list) -> 
         return df.iloc[0:0]
 
     fechas = pd.to_datetime(df[col_fecha], errors='coerce')
-    meses = fechas.dt.strftime('%m')
+    meses = fechas.dt.strftime('%Y-%m')
     return df[meses.isin(meses_validos)]
 
 def crear_solicitudes_subdirectores(db, propuesta_unica, df: pd.DataFrame):
