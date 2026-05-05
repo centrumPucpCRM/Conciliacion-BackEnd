@@ -493,41 +493,49 @@ def cargar_tipo_cambio(db):
 def obtener_meses_validos():
     """
     Calcula los meses válidos basados en la fecha actual de Perú.
-    Retorna: mes_conciliado (mes anterior) y meses_anteriores (3 meses anteriores al conciliado)
+    Retorna una lista con los 4 meses anteriores al mes actual (excluye el mes actual).
+    Ejemplo: si hoy es 2026-07-05 -> ["04", "03", "02", "01"].
     """
-    # Obtener fecha actual en zona horaria de Perú
     peru_tz = pytz.timezone('America/Lima')
     fecha_actual = datetime.datetime.now(peru_tz)
-    
-    # Mes conciliado = mes anterior al actual
-    if fecha_actual.month == 1:
-        mes_conciliado = 12
-        año_conciliado = fecha_actual.year - 1
-    else:
-        mes_conciliado = fecha_actual.month - 1
-        año_conciliado = fecha_actual.year
-    
-    # Meses anteriores = 3 meses anteriores al mes conciliado
-    meses_anteriores = []
-    for i in range(1, 4):  # 1, 2, 3 meses antes del conciliado
-        if mes_conciliado - i <= 0:
-            mes_anterior = 12 + (mes_conciliado - i)
-            año_anterior = año_conciliado - 1
-        else:
-            mes_anterior = mes_conciliado - i
-            año_anterior = año_conciliado
-        meses_anteriores.append(f"{mes_anterior:02d}")
-    
-    return f"{mes_conciliado:02d}", meses_anteriores
 
-def crear_solicitudes_subdirectores(db, propuesta_unica):
+    meses_validos = []
+    for i in range(3, 7):
+        mes = fecha_actual.month - i
+        if mes <= 0:
+            mes += 12
+        meses_validos.append(f"{mes:02d}")
+
+    return meses_validos
+
+def filtrar_df_por_meses_inauguracion(df: pd.DataFrame, meses_validos: list) -> pd.DataFrame:
+    col_fecha = 'programa.fecha_de_inauguracion'
+    if col_fecha not in df.columns:
+        print(f"[WARNING] Columna '{col_fecha}' no encontrada. No se generarán solicitudes.")
+        return df.iloc[0:0]
+
+    fechas = pd.to_datetime(df[col_fecha], errors='coerce')
+    meses = fechas.dt.strftime('%m')
+    return df[meses.isin(meses_validos)]
+
+def crear_solicitudes_subdirectores(db, propuesta_unica, df: pd.DataFrame):
     from fastapi_app.models.log import Log
     
     # Obtener meses válidos
-    mes_conciliado, meses_anteriores = obtener_meses_validos()
-    meses_validos = [mes_conciliado] + meses_anteriores
+    meses_validos = obtener_meses_validos()
     
     print(f"[INFO] Creando solicitudes de subdirectores solo para programas con mes en: {meses_validos}")
+
+    df_filtrado = filtrar_df_por_meses_inauguracion(df, meses_validos)
+    df_programas = df_filtrado.dropna(subset=['programa.codigo'])
+    codigos_programa = [
+        str(codigo).strip()
+        for codigo in df_programas['programa.codigo'].astype(str).str.strip().unique()
+        if str(codigo).strip()
+    ]
+    if not codigos_programa:
+        print("[INFO] No hay programas en el DF filtrado. Saltando creación de solicitudes de subdirectores.")
+        return
     
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_COMERCIAL").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
@@ -547,7 +555,7 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
     # Verificar que existen programas con meses válidos en esta propuesta
     programas_validos = db.query(Programa).filter(
         Programa.idPropuesta == propuesta_unica.id,
-        Programa.mes.in_(meses_validos)
+        Programa.codigo.in_(codigos_programa)
     ).count()
     
     if programas_validos == 0:
@@ -601,14 +609,24 @@ def crear_solicitudes_subdirectores(db, propuesta_unica):
         db.flush()
 
 
-def crear_solicitudes_Jp(db, propuesta_unica):
+def crear_solicitudes_Jp(db, propuesta_unica, df: pd.DataFrame):
     from fastapi_app.models.log import Log
     
     # Obtener meses válidos
-    mes_conciliado, meses_anteriores = obtener_meses_validos()
-    meses_validos = [mes_conciliado] + meses_anteriores
+    meses_validos = obtener_meses_validos()
     
     print(f"[INFO] Creando solicitudes JP solo para programas con mes en: {meses_validos}")
+
+    df_filtrado = filtrar_df_por_meses_inauguracion(df, meses_validos)
+    df_programas = df_filtrado.dropna(subset=['programa.codigo'])
+    codigos_programa = [
+        str(codigo).strip()
+        for codigo in df_programas['programa.codigo'].astype(str).str.strip().unique()
+        if str(codigo).strip()
+    ]
+    if not codigos_programa:
+        print("[INFO] No hay programas en el DF filtrado. Saltando creación de solicitudes JP.")
+        return
     
     tipo_aprobacion = db.query(TipoSolicitud).filter_by(nombre="APROBACION_JP").first()
     valor_pendiente = db.query(ValorSolicitud).filter_by(nombre="PENDIENTE").first()
@@ -618,7 +636,7 @@ def crear_solicitudes_Jp(db, propuesta_unica):
         Programa.idPropuesta == propuesta_unica.id,
         Programa.idJefeProducto.isnot(None),
         Programa.idSubdirector.isnot(None),
-        Programa.mes.in_(meses_validos)  # ✅ Filtrar solo programas con meses válidos
+        Programa.codigo.in_(codigos_programa)
     ).all()
     
     if not programas:
@@ -794,13 +812,13 @@ def process_csv_data(db: Session, data: Dict[str, Any]) -> Dict[str, Any]:
 
         # 5. Crear solicitudes de aprobación por cartera y subdirección
         start = time.time()
-        crear_solicitudes_subdirectores(db, propuesta_unica)
+        crear_solicitudes_subdirectores(db, propuesta_unica, df)
         timings['generar_solicitudes_aprobacion'] = time.time() - start
         print(f"Tiempo generar_solicitudes_aprobacion: {timings['generar_solicitudes_aprobacion']:.4f} segundos")
 
         # 6. Crear solicitudes de aprobación JP
         start = time.time()
-        crear_solicitudes_Jp(db, propuesta_unica)
+        crear_solicitudes_Jp(db, propuesta_unica, df)
         timings['crear_solicitudes_Jp'] = time.time() - start
         print(f"Tiempo crear_solicitudes_Jp: {timings['crear_solicitudes_Jp']:.4f} segundos")
 
