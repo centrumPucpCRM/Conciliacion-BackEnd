@@ -117,6 +117,9 @@ def obtener_programas_conciliacion(
         oportunidades = oportunidades_por_programa.get(p.id, [])
         # Retrocedidos no suman al monto/count real, pero sí al conciliado
         oportunidades_activas = [o for o in oportunidades if not o.retrocedioEnCRM]
+        agregados_ultimo = [o for o in oportunidades_activas if o.agregadoUltimoMomento]
+        agregados_count = len(agregados_ultimo)
+        agregados_monto = sum(o.monto or 0 for o in agregados_ultimo)
         oportunidades_conciliadas = [o for o in oportunidades_activas if not o.agregadoUltimoMomento]
         monto_opty = sum(o.montoPropuesto or 0 for o in oportunidades_conciliadas)
         monto_actual = sum(o.monto or 0 for o in oportunidades_activas)
@@ -159,8 +162,8 @@ def obtener_programas_conciliacion(
             "montoActual": monto_actual,
             "enRiesgo": bool(p.enRiesgo),
             "comentario": p.comentario,
-            "fijoFueraDeCounter": p.fijoFueraDeCounter or 0,
-            "montoFijoFueraDeCounter": p.montoFijoFueraDeCounter or 0.0,
+            "fijoFueraDeCounter": (p.fijoFueraDeCounter or 0) + agregados_count,
+            "montoFijoFueraDeCounter": (p.montoFijoFueraDeCounter or 0.0) + agregados_monto,
             "alumnos": alumnos,
         }
 
@@ -342,10 +345,17 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
                         retrocesos += 1
             total_retrocesos += retrocesos
 
+            agregados_ultimo = [
+                o for o in oportunidades_db
+                if o.agregadoUltimoMomento and not o.retrocedioEnCRM
+            ]
+            agregados_count = len(agregados_ultimo)
+            agregados_monto = sum(o.monto or 0 for o in agregados_ultimo)
+
             resultados.append({
                 "idPrograma": p.id,
-                "fijoFueraDeCounter": resultado["count"],
-                "montoFijoFueraDeCounter": resultado["monto"],
+                "fijoFueraDeCounter": resultado["count"] + agregados_count,
+                "montoFijoFueraDeCounter": resultado["monto"] + agregados_monto,
                 "retrocesos_actualizados": retrocesos,
             })
         except Exception as e:
