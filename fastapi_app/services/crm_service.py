@@ -30,7 +30,7 @@ DEFAULT_FIELDS_CONTACT = (
     "ContactName,PersonDEO_CTRNrodedocumento_c,EmailAddress,OverallPrimaryFormattedPhoneNumber"
 )
 
-# Sesión HTTP reutilizable por thread (ThreadLocal)s
+# Sesión HTTP reutilizable por thread (ThreadLocal)ss
 _thread_local = threading.local()
 
 
