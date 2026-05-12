@@ -117,7 +117,7 @@ def obtener_programas_conciliacion(
         oportunidades = oportunidades_por_programa.get(p.id, [])
         # Retrocedidos no suman al monto/count real, pero sí al conciliado
         oportunidades_activas = [o for o in oportunidades if not o.retrocedioEnCRM]
-        agregados_ultimo = [o for o in oportunidades_activas if o.agregadoUltimoMomento]
+        agregados_ultimo = [o for o in oportunidades_activas if o.agregadoUltimoMomento and not o.becado]
         agregados_count = len(agregados_ultimo)
         agregados_monto = sum(o.monto or 0 for o in agregados_ultimo)
         oportunidades_conciliadas = [o for o in oportunidades_activas if not o.agregadoUltimoMomento]
@@ -347,7 +347,7 @@ def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_d
 
             agregados_ultimo = [
                 o for o in oportunidades_db
-                if o.agregadoUltimoMomento and not o.retrocedioEnCRM
+                if o.agregadoUltimoMomento and not o.retrocedioEnCRM and not o.becado
             ]
             agregados_count = len(agregados_ultimo)
             agregados_monto = sum(o.monto or 0 for o in agregados_ultimo)

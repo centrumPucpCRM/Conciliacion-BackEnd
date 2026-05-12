@@ -76,6 +76,8 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
             opp.retrocedioEnCRM = retrocedio
             if retrocedio:
                 retrocesos += 1
+        if opp.agregadoUltimoMomento and (opp.monto or 0) < 1 and not opp.becado:
+            opp.becado = True
 
     # 3. Persistir alumnos de último momento (Matrícula / Cerrada-Ganada) nuevos en CRM
     party_numbers_existentes = {
@@ -110,6 +112,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
             continue
         descuento = lead.get("descuento")
         monto = float(lead.get("monto") or 0)
+        becado = monto < 1
         nueva_opp = Oportunidad(
             nombre=lead.get("nombre"),
             documentoIdentidad=lead.get("dni"),
@@ -126,7 +129,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
             idPrograma=programa_id,
             idPropuesta=programa.idPropuesta,
             conciliado=False,
-            becado=False,
+            becado=becado,
             posibleAtipico=False,
             eliminado=False,
             retrocedioEnCRM=False,
@@ -149,6 +152,7 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         Oportunidad.agregadoUltimoMomento == True,
         Oportunidad.eliminado == False,
         Oportunidad.retrocedioEnCRM == False,
+        Oportunidad.becado == False,
     ).all()
     agregados_count = len(agregados_ultimo)
     agregados_monto = sum(o.monto or 0 for o in agregados_ultimo)
@@ -180,6 +184,7 @@ def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)
         Oportunidad.agregadoUltimoMomento == True,
         Oportunidad.eliminado == False,
         Oportunidad.retrocedioEnCRM == False,
+        Oportunidad.becado == False,
     ).all()
     agregados_leads = [
         {

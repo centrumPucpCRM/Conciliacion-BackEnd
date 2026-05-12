@@ -92,6 +92,16 @@ def obtener_leads_convertidos(codigo_crm: str) -> List[Dict[str, Any]]:
 
 
 _ETAPAS_NO_CP = {"1 - Interés", "2 - Calificación"}
+_MONTO_BECADO_PROYECCION = 1.0
+
+
+def _es_becado_proyeccion(item: Dict[str, Any]) -> bool:
+    monto = item.get("DealAmount") or 0
+    try:
+        monto = float(monto)
+    except (TypeError, ValueError):
+        monto = 0.0
+    return monto < _MONTO_BECADO_PROYECCION
 
 def obtener_fijos_fuera_counter(codigo_crm: str) -> Dict[str, Any]:
     """
@@ -121,7 +131,10 @@ def obtener_fijos_fuera_counter(codigo_crm: str) -> Dict[str, Any]:
         if i.get("CTRFannelDataEstudioEtapaOpty_c") in _ETAPAS_NO_CP
     ]
 
-    todos = items_ffc + items_no_cp
+    todos = [
+        i for i in (items_ffc + items_no_cp)
+        if not _es_becado_proyeccion(i)
+    ]
     total_monto = sum(i.get("DealAmount", 0) or 0 for i in todos)
     return {"count": len(todos), "monto": float(total_monto)}
 
@@ -155,7 +168,10 @@ def obtener_detalle_fijos_fuera_counter(codigo_crm: str) -> List[Dict[str, Any]]
         if i.get("CTRFannelDataEstudioEtapaOpty_c") in _ETAPAS_NO_CP
     ]
 
-    todos = items_ffc + items_no_cp
+    todos = [
+        i for i in (items_ffc + items_no_cp)
+        if not _es_becado_proyeccion(i)
+    ]
     return [
         {
             "leadNumber": i.get("LeadNumber"),
