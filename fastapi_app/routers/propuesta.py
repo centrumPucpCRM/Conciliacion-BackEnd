@@ -299,6 +299,97 @@ def obtener_programas_conciliacion(
     }
 
 
+@router.get("/{propuesta_id}/meta-bp")
+def obtener_meta_bp(
+    propuesta_id: int,
+    user_id: Optional[int] = Query(None, description="ID del usuario para filtrar programas por rol"),
+    db: Session = Depends(get_db),
+):
+    """
+    Devuelve las metas de venta BP (Business Plan) de una propuesta, agrupadas por
+    `fechaDeInaguracionBP` (NO por la fecha operativa).
+
+    A diferencia de /programas-conciliacion, aquí solo se necesita el número agregado,
+    no el detalle de cada programa. Se entrega separado en dos sumas no solapadas:
+      - metaVentaBpMesConciliado: programas con fecha BP en el mes conciliado.
+      - metaVentaBpTresMeses:     programas con fecha BP en los 3 meses anteriores.
+
+    Reglas:
+      - Solo filtrado por rol del usuario (mismo criterio que /programas-conciliacion).
+      - Programas sin `fechaDeInaguracionBP` se excluyen (no suman a ninguna meta BP).
+    """
+    propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
+    if not propuesta:
+        raise HTTPException(status_code=404, detail="Propuesta no encontrada")
+
+    fecha_propuesta = propuesta.fechaPropuesta
+    if not fecha_propuesta:
+        raise HTTPException(status_code=400, detail="La propuesta no tiene fecha")
+
+    # Mes conciliado = mes anterior a la fecha de propuesta (mismo cálculo que el endpoint principal)
+    if fecha_propuesta.month == 1:
+        mes_conciliado = 12
+        anio_conciliado = fecha_propuesta.year - 1
+    else:
+        mes_conciliado = fecha_propuesta.month - 1
+        anio_conciliado = fecha_propuesta.year
+
+    # Tres meses anteriores al mes conciliado (offsets 2, 3, 4)
+    meses_anteriores = []
+    for offset in [2, 3, 4]:
+        mes = fecha_propuesta.month - offset
+        anio = fecha_propuesta.year
+        while mes <= 0:
+            mes += 12
+            anio -= 1
+        meses_anteriores.append((mes, anio))
+
+    # Filtrar programas según rol del usuario (mismo criterio que /programas-conciliacion)
+    if user_id:
+        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
+        roles_usuario = {rol.nombre for rol in usuario.roles} if usuario and usuario.roles else set()
+
+        roles_daf = {"DAF - Supervisor", "DAF - Subdirector", "DAF - Admin"}
+        roles_ver_todo = roles_daf | {"Comercial - Director"}
+        if roles_usuario & roles_ver_todo:
+            programas_all = db.query(ProgramaModel).filter(
+                ProgramaModel.idPropuesta == propuesta_id
+            ).all()
+        elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
+            condiciones = []
+            if "Comercial - Jefe de producto" in roles_usuario:
+                condiciones.append(ProgramaModel.idJefeProducto == user_id)
+            if "Comercial - Subdirector" in roles_usuario:
+                condiciones.append(ProgramaModel.idSubdirector == user_id)
+            programas_all = db.query(ProgramaModel).filter(
+                ProgramaModel.idPropuesta == propuesta_id,
+                or_(*condiciones)
+            ).all()
+        else:
+            programas_all = []
+    else:
+        programas_all = db.query(ProgramaModel).filter(
+            ProgramaModel.idPropuesta == propuesta_id
+        ).all()
+
+    meta_bp_mes_conciliado = 0.0
+    meta_bp_tres_meses = 0.0
+    for p in programas_all:
+        fecha_bp = p.fechaDeInaguracionBP
+        if not fecha_bp:
+            continue  # Sin fecha BP -> excluido
+        meta = p.metaDeVentaBP or 0.0
+        if fecha_bp.month == mes_conciliado and fecha_bp.year == anio_conciliado:
+            meta_bp_mes_conciliado += meta
+        elif any(fecha_bp.month == m and fecha_bp.year == a for m, a in meses_anteriores):
+            meta_bp_tres_meses += meta
+
+    return {
+        "metaVentaBpMesConciliado": meta_bp_mes_conciliado,
+        "metaVentaBpTresMeses": meta_bp_tres_meses,
+    }
+
+
 @router.post("/{propuesta_id}/sync-todos-fijo-fuera-counter")
 def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_db)):
     """
