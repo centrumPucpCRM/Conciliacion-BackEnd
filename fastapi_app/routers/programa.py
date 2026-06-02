@@ -188,6 +188,8 @@ def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)
     ).all()
     agregados_leads = [
         {
+            "id": o.id,  # id real de la oportunidad en BD (las de CRM no lo tienen)
+            "eliminable": True,  # solo las agregadas en último momento se pueden borrar de BD
             "leadNumber": o.optyNumber or str(o.id),
             "nombre": o.nombre,
             "dni": o.documentoIdentidad,

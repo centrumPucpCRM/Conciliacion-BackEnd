@@ -284,6 +284,36 @@ def listar_oportunidades_disponibles_crm(
         )
 
 
+@router.delete("/{oportunidad_id}/agregado-ultimo-momento")
+def eliminar_oportunidad_agregada(oportunidad_id: int, db: Session = Depends(get_db)):
+    """
+    Borra FÍSICAMENTE una oportunidad que fue agregada en último momento por el sync
+    (agregadoUltimoMomento=True). Es el reverso del botón "Actualizar".
+
+    Por seguridad solo permite borrar oportunidades con agregadoUltimoMomento=True;
+    las oportunidades normales/conciliadas no se pueden eliminar por esta vía.
+    Limpia primero las relaciones SolicitudXOportunidad para evitar fallos de FK.
+    """
+    opp = db.query(Oportunidad).filter(Oportunidad.id == oportunidad_id).first()
+    if not opp:
+        raise HTTPException(status_code=404, detail="Oportunidad no encontrada")
+    if not opp.agregadoUltimoMomento:
+        raise HTTPException(
+            status_code=400,
+            detail="Solo se pueden eliminar oportunidades agregadas en último momento",
+        )
+
+    # Limpiar relaciones para no romper FKs (las agregadas no suelen tener solicitudes,
+    # pero por seguridad se borran las que existan)
+    db.query(SolicitudXOportunidad).filter(
+        SolicitudXOportunidad.idOportunidad == oportunidad_id
+    ).delete(synchronize_session=False)
+
+    db.delete(opp)
+    db.commit()
+    return {"deleted": oportunidad_id}
+
+
 @router.get("/solicitudes")
 def obtener_solicitudes_oportunidad(
     id_oportunidad: int = Query(..., alias="id_oportunidad"),
