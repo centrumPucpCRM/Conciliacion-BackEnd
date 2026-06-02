@@ -4,8 +4,33 @@ from ..database import get_db
 from ..models.programa import Programa
 from ..services.crm_service import obtener_fijos_fuera_counter, obtener_detalle_fijos_fuera_counter, obtener_alumnos_ultimo_momento, obtener_etapas_actuales_convertidos
 from ..models.oportunidad import Oportunidad
+from ..models.proyeccion_excluido import ProyeccionExcluido
 
 router = APIRouter(prefix="/programa", tags=["Programa"])
+
+
+def _leadnumbers_excluidos(db: Session, programa_id: int) -> set:
+    """Set de leadNumber excluidos manualmente de la proyección para un programa."""
+    return {
+        str(e.leadNumber).strip()
+        for e in db.query(ProyeccionExcluido).filter(
+            ProyeccionExcluido.idPrograma == programa_id
+        ).all()
+        if e.leadNumber
+    }
+
+
+def _ffc_filtrado(db: Session, programa) -> tuple:
+    """
+    Devuelve (leads, count, monto) de Fijo Fuera de Counter para un programa,
+    quitando los leadNumber que fueron excluidos manualmente.
+    """
+    leads = obtener_detalle_fijos_fuera_counter(programa.codigo)
+    excluidos = _leadnumbers_excluidos(db, programa.id)
+    leads = [l for l in leads if str(l.get("leadNumber") or "").strip() not in excluidos]
+    count = len(leads)
+    monto = sum(float(l.get("monto") or 0) for l in leads)
+    return leads, count, monto
 
 @router.patch("/anexar-comentario")
 def anexar_comentario_programa(
@@ -54,10 +79,10 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     if not programa.codigo:
         raise HTTPException(status_code=400, detail="El programa no tiene código CRM")
 
-    # 1. Actualizar FFC
-    resultado = obtener_fijos_fuera_counter(programa.codigo)
-    programa.fijoFueraDeCounter = resultado["count"]
-    programa.montoFijoFueraDeCounter = resultado["monto"]
+    # 1. Actualizar FFC (descontando los leads excluidos manualmente de la proyección)
+    _, ffc_count, ffc_monto = _ffc_filtrado(db, programa)
+    programa.fijoFueraDeCounter = ffc_count
+    programa.montoFijoFueraDeCounter = ffc_monto
 
     # 2. Detectar retrocesos — marcar flag, NO cambiar etapa
     _ETAPAS_RETROCESO = {"1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida"}
@@ -159,8 +184,8 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
 
     return {
         "idPrograma": programa_id,
-        "fijoFueraDeCounter": resultado["count"] + agregados_count,
-        "montoFijoFueraDeCounter": resultado["monto"] + agregados_monto,
+        "fijoFueraDeCounter": ffc_count + agregados_count,
+        "montoFijoFueraDeCounter": ffc_monto + agregados_monto,
         "retrocesos_actualizados": retrocesos,
         "nuevos_ultimo_momento": nuevos_agregados,
     }
@@ -178,7 +203,10 @@ def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)
     if not programa.codigo:
         raise HTTPException(status_code=400, detail="El programa no tiene código CRM")
 
-    leads = obtener_detalle_fijos_fuera_counter(programa.codigo)
+    # FFC del CRM (ya filtrados de los excluidos manualmente). Son eliminables vía
+    # exclusión por leadNumber (no tienen id en BD).
+    leads_ffc, _, _ = _ffc_filtrado(db, programa)
+    leads = [{**l, "eliminable": True} for l in leads_ffc]
     agregados_ultimo = db.query(Oportunidad).filter(
         Oportunidad.idPrograma == programa_id,
         Oportunidad.agregadoUltimoMomento == True,
@@ -205,6 +233,45 @@ def get_fijo_fuera_counter_leads(programa_id: int, db: Session = Depends(get_db)
 
     leads_combinados = leads + agregados_leads
     return {"leads": leads_combinados, "total": len(leads_combinados)}
+
+
+@router.post("/{programa_id}/excluir-ffc")
+def excluir_ffc(
+    programa_id: int,
+    body: dict = Body(..., example={"leadNumber": "L-12345"}),
+    db: Session = Depends(get_db),
+):
+    """
+    Excluye manualmente un lead de proyección (FFC / Interés / Admisión) de un programa.
+    El lead viene del CRM en vivo (no es fila de BD), así que se guarda su leadNumber
+    para filtrarlo del modal y del conteo de Fijo Fuera de Counter. Tras excluirlo se
+    recalcula y persiste el FFC del programa.
+    """
+    lead_number = str(body.get("leadNumber") or "").strip()
+    if not lead_number:
+        raise HTTPException(status_code=400, detail="El campo 'leadNumber' es requerido")
+
+    programa = db.query(Programa).filter(Programa.id == programa_id).first()
+    if not programa:
+        raise HTTPException(status_code=404, detail="Programa no encontrado")
+
+    # Evitar duplicados
+    existe = db.query(ProyeccionExcluido).filter(
+        ProyeccionExcluido.idPrograma == programa_id,
+        ProyeccionExcluido.leadNumber == lead_number,
+    ).first()
+    if not existe:
+        db.add(ProyeccionExcluido(idPrograma=programa_id, leadNumber=lead_number))
+        db.commit()
+
+    # Recalcular y persistir FFC del programa descontando los excluidos
+    if programa.codigo:
+        _, ffc_count, ffc_monto = _ffc_filtrado(db, programa)
+        programa.fijoFueraDeCounter = ffc_count
+        programa.montoFijoFueraDeCounter = ffc_monto
+        db.commit()
+
+    return {"excluido": lead_number, "idPrograma": programa_id}
 
 
 @router.get("/{programa_id}/alumnos-ultimo-momento")

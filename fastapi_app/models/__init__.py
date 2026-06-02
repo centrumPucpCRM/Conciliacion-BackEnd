@@ -16,6 +16,7 @@ from .solicitud import Solicitud, TipoSolicitud, ValorSolicitud
 from .solicitud_x_oportunidad import SolicitudXOportunidad
 from .solicitud_x_programa import SolicitudXPrograma
 from .oportunidad import Oportunidad
+from .proyeccion_excluido import ProyeccionExcluido
 from .associations import usuario_cartera
 
 __all__ = [
@@ -38,5 +39,6 @@ __all__ = [
     "SolicitudXOportunidad",
     "SolicitudXPrograma",
     "Oportunidad",
+    "ProyeccionExcluido",
     "usuario_cartera",
 ]
