@@ -374,6 +374,189 @@ def obtener_meta_bp(
     }
 
 
+@router.get("/conciliaciones-comparables")
+def listar_conciliaciones_comparables(
+    excluir_id: Optional[int] = Query(None, description="ID de propuesta a excluir (la actual)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista las propuestas en estado CONCILIADA o PROYECTADA (no GENERADA ni CANCELADA),
+    para usarlas como baseline en el Control de Cambios.
+    """
+    from ..models.propuesta import EstadoPropuesta as EstadoPropuestaModel
+    q = (
+        db.query(Propuesta)
+        .join(Propuesta.estadoPropuesta)
+        .filter(EstadoPropuestaModel.nombre.in_(["CONCILIADA", "PROYECTADA"]))
+    )
+    if excluir_id:
+        q = q.filter(Propuesta.id != excluir_id)
+    propuestas = q.order_by(Propuesta.id.desc()).all()
+    return [
+        {
+            "id": p.id,
+            "nombre": p.nombre,
+            "fechaPropuesta": p.fechaPropuesta,
+            "horaPropuesta": p.horaPropuesta,
+            "estado": p.estadoPropuesta.nombre if p.estadoPropuesta else None,
+        }
+        for p in propuestas
+    ]
+
+
+@router.get("/{propuesta_id}/control-de-cambios")
+def control_de_cambios(
+    propuesta_id: int,
+    baseline_id: int = Query(..., description="ID de la conciliación seleccionada (baseline a comparar)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Compara los programas de los '3 meses anteriores' de la propuesta actual contra una
+    conciliación previa (baseline), a nivel alumno, enfocándose en los conciliados.
+
+    - Match de programas por `codigo` CRM.
+    - Match de alumnos por documentoIdentidad DENTRO del mismo programa (son únicos ahí).
+    - Universo: alumnos con conciliado=True en cualquiera de las dos conciliaciones.
+    - Cambios detectados por alumno: etapa, monto, dejó de estar conciliado, desapareció/eliminado, nuevo.
+    """
+    actual = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
+    if not actual:
+        raise HTTPException(status_code=404, detail="Propuesta actual no encontrada")
+    baseline = db.query(Propuesta).filter(Propuesta.id == baseline_id).first()
+    if not baseline:
+        raise HTTPException(status_code=404, detail="Conciliación baseline no encontrada")
+    if not actual.fechaPropuesta:
+        raise HTTPException(status_code=400, detail="La propuesta actual no tiene fecha")
+
+    # 3 meses anteriores al mes conciliado de la propuesta ACTUAL (offsets 2,3,4)
+    meses_anteriores = []
+    for offset in [2, 3, 4]:
+        mes = actual.fechaPropuesta.month - offset
+        anio = actual.fechaPropuesta.year
+        while mes <= 0:
+            mes += 12
+            anio -= 1
+        meses_anteriores.append((mes, anio))
+
+    programas_actual = [
+        p for p in db.query(ProgramaModel).filter(ProgramaModel.idPropuesta == propuesta_id).all()
+        if p.fechaInaguracionPropuesta
+        and any(p.fechaInaguracionPropuesta.month == m and p.fechaInaguracionPropuesta.year == a
+                for m, a in meses_anteriores)
+    ]
+
+    # Programas del baseline indexados por codigo
+    programas_baseline = db.query(ProgramaModel).filter(ProgramaModel.idPropuesta == baseline_id).all()
+    baseline_por_codigo = {}
+    for p in programas_baseline:
+        if p.codigo is not None:
+            baseline_por_codigo.setdefault(str(p.codigo).strip(), p)
+
+    # Oportunidades de ambas propuestas, indexadas por idPrograma
+    def opps_por_programa(prop_id):
+        d = {}
+        for o in db.query(Oportunidad).filter(Oportunidad.idPropuesta == prop_id).all():
+            d.setdefault(o.idPrograma, []).append(o)
+        return d
+
+    opps_actual = opps_por_programa(propuesta_id)
+    opps_baseline = opps_por_programa(baseline_id)
+
+    def norm_dni(o):
+        return str(o.documentoIdentidad or "").strip()
+
+    items = []
+    for p in programas_actual:
+        codigo = str(p.codigo).strip() if p.codigo is not None else None
+        base_prog = baseline_por_codigo.get(codigo) if codigo else None
+
+        cur_list = [o for o in opps_actual.get(p.id, []) if not o.agregadoUltimoMomento]
+        base_list = opps_baseline.get(base_prog.id, []) if base_prog else []
+
+        cur_by_dni = {norm_dni(o): o for o in cur_list if norm_dni(o)}
+        base_by_dni = {norm_dni(o): o for o in base_list if norm_dni(o)}
+
+        # Universo: conciliado=True en cualquiera de las dos
+        universo = set()
+        for dni, o in cur_by_dni.items():
+            if o.conciliado:
+                universo.add(dni)
+        for dni, o in base_by_dni.items():
+            if o.conciliado:
+                universo.add(dni)
+
+        alumnos_cambios = []
+        for dni in universo:
+            cur = cur_by_dni.get(dni)
+            base = base_by_dni.get(dni)
+            cambios = []
+
+            if base and cur:
+                if (base.etapaVentaPropuesta or "") != (cur.etapaVentaPropuesta or ""):
+                    cambios.append("etapa")
+                if round(base.monto or 0, 2) != round(cur.monto or 0, 2):
+                    cambios.append("monto")
+                if base.conciliado and not cur.conciliado:
+                    cambios.append("desconciliado")
+                if cur.eliminado:
+                    cambios.append("eliminado")
+            elif base and not cur:
+                cambios.append("desaparecido")
+            elif cur and not base:
+                cambios.append("nuevo")
+
+            if not cambios:
+                continue
+
+            ref = cur or base
+            alumnos_cambios.append({
+                "nombre": ref.nombre if ref else None,
+                "documentoIdentidad": dni,
+                "cambios": cambios,
+                "antes": None if not base else {
+                    "etapa": base.etapaVentaPropuesta,
+                    "monto": base.monto,
+                    "moneda": base.moneda,
+                    "conciliado": bool(base.conciliado),
+                },
+                "ahora": None if not cur else {
+                    "etapa": cur.etapaVentaPropuesta,
+                    "monto": cur.monto,
+                    "moneda": cur.moneda,
+                    "conciliado": bool(cur.conciliado),
+                    "eliminado": bool(cur.eliminado),
+                },
+            })
+
+        items.append({
+            "id": p.id,
+            "codigo": p.codigo,
+            "nombre": p.nombre,
+            "subdireccion": p.subdireccion,
+            "cartera": p.cartera,
+            "fechaDeInaguracion": p.fechaInaguracionPropuesta,
+            "metaDeVenta": p.metaDeVenta,
+            "existeEnBaseline": base_prog is not None,
+            "tieneCambio": len(alumnos_cambios) > 0,
+            "cantidadCambios": len(alumnos_cambios),
+            "alumnosCambios": alumnos_cambios,
+        })
+
+    # Programas con cambios primero
+    items.sort(key=lambda x: (not x["tieneCambio"], x["nombre"] or ""))
+
+    return {
+        "propuestaActual": {"id": actual.id, "nombre": actual.nombre},
+        "baseline": {
+            "id": baseline.id,
+            "nombre": baseline.nombre,
+            "estado": baseline.estadoPropuesta.nombre if baseline.estadoPropuesta else None,
+        },
+        "totalProgramasConCambio": sum(1 for it in items if it["tieneCambio"]),
+        "items": items,
+    }
+
+
 @router.post("/{propuesta_id}/sync-todos-fijo-fuera-counter")
 def sync_todos_fijo_fuera_counter(propuesta_id: int, db: Session = Depends(get_db)):
     """
