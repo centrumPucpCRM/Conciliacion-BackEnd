@@ -404,6 +404,22 @@ def listar_conciliaciones_comparables(
     ]
 
 
+# Ranking del embudo de ventas: mayor = más avanzado hacia "ganado".
+# "Cerrada/Perdida" se considera el peor (0). Solo se marca cambio de etapa cuando
+# la etapa RETROCEDE (rank menor), no cuando avanza (ej. Matrícula -> Cerrada/Ganada no cuenta).
+_RANK_ETAPA = {
+    "5 - Cerrada/Perdida": 0,
+    "1 - Interés": 1,
+    "2 - Calificación": 2,
+    "3 - Matrícula": 3,
+    "4 - Cerrada/Ganada": 4,
+}
+
+
+def _rank_etapa(etapa):
+    return _RANK_ETAPA.get((etapa or "").strip())
+
+
 @router.get("/{propuesta_id}/control-de-cambios")
 def control_de_cambios(
     propuesta_id: int,
@@ -492,7 +508,11 @@ def control_de_cambios(
             cambios = []
 
             if base and cur:
-                if (base.etapaVentaPropuesta or "") != (cur.etapaVentaPropuesta or ""):
+                # Solo cuenta como cambio si la etapa RETROCEDE (no si avanza en el funnel).
+                # Ej: Matrícula -> Cerrada/Ganada NO interesa; Ganada -> Cerrada/Perdida SÍ.
+                rb = _rank_etapa(base.etapaVentaPropuesta)
+                rc = _rank_etapa(cur.etapaVentaPropuesta)
+                if rb is not None and rc is not None and rc < rb:
                     cambios.append("etapa")
                 if round(base.monto or 0, 2) != round(cur.monto or 0, 2):
                     cambios.append("monto")
