@@ -319,6 +319,8 @@ def obtener_programas_mes_conciliado(id_usuario: int, id_propuesta: int, db: Ses
     else:
         # Otros usuarios: sin acceso a programas
         programas = []
+    # Excluir programas cancelados de los listados (siguen contando para Meta BP en su endpoint aparte)
+    programas = [p for p in programas if (p.estado or "").strip().lower() != "cancelado"]
     programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes_anterior and p.fechaInaguracionPropuesta.year == anio_anterior]
     etapas_excluir =  ["1 - Interés", "2 - Calificación", "5 - Cerrada/Perdida","Agregado CRM"]
     oportunidades_all = db.query(Oportunidad).filter(
@@ -511,6 +513,8 @@ def obtener_programas_meses_anteriores(id_usuario: int, id_propuesta: int, db: S
         else:
             # Otros usuarios: sin acceso a programas
             programas = []
+        # Excluir programas cancelados de los listados (siguen contando para Meta BP en su endpoint aparte)
+        programas = [p for p in programas if (p.estado or "").strip().lower() != "cancelado"]
         programas_filtrados = [p for p in programas if p.fechaInaguracionPropuesta.month == mes and p.fechaInaguracionPropuesta.year == anio]
         for p in programas_filtrados:
             # Excluir programas con noAperturar = True

@@ -294,6 +294,7 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         punto_minimo = sanitize_value(row.get('programa.punto_minimo_apertura', 0))
         meta_alumnos = sanitize_value(row.get('programa.meta_alumnos', 0))
         cartera_nombre = sanitize_value(row.get('cartera.nombre'))
+        estado_programa = sanitize_value(row.get('programa.estado'))
 
         # Convertir a tipos correctos después de sanitizar
         precio_lista = float(precio_lista) if precio_lista is not None else 0.0
@@ -322,7 +323,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             mes=mes,
             mesPropuesto=mes,
             metaDeAlumnos=meta_alumnos,
-            enRiesgo=enRiesgo  # Leído del CSV
+            enRiesgo=enRiesgo,  # Leído del CSV
+            estado=estado_programa
         )
         programas_bulk.append(programa)
         programas_dict[programa_codigo] = programa
