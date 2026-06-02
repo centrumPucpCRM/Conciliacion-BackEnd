@@ -85,6 +85,9 @@ def obtener_programas_conciliacion(
             ProgramaModel.idPropuesta == propuesta_id
         ).order_by(ProgramaModel.fechaInaguracionPropuesta.desc()).all()
 
+    # Excluir programas cancelados de los listados (siguen contando para Meta BP en /meta-bp)
+    programas_all = [p for p in programas_all if (p.estado or "").strip().lower() != "cancelado"]
+
     # Separar programas por mes
     programas_mes_conciliado = [
         p for p in programas_all
@@ -299,24 +302,40 @@ def obtener_programas_conciliacion(
     }
 
 
+# Meta de venta BP (Business Plan) dictada manualmente por (año, mes).
+# Valores fijos: NO se calculan desde la BD ni desde el Excel.
+META_VENTA_BP_POR_MES = {
+    (2026, 1): 1463749.9,
+    (2026, 2): 1796625.0,
+    (2026, 3): 3421088.0,
+    (2026, 4): 19389925.0,
+    (2026, 5): 10191727.7,
+    (2026, 6): 11506703.0,
+    (2026, 7): 5860700.0,
+    (2026, 8): 17639585.0,
+    (2026, 9): 10918190.0,
+    (2026, 10): 8359688.0,
+    (2026, 11): 21939385.0,
+    (2026, 12): 3526263.0,
+}
+
+
 @router.get("/{propuesta_id}/meta-bp")
 def obtener_meta_bp(
     propuesta_id: int,
-    user_id: Optional[int] = Query(None, description="ID del usuario para filtrar programas por rol"),
+    user_id: Optional[int] = Query(None, description="(no usado) compatibilidad con el cliente"),
     db: Session = Depends(get_db),
 ):
     """
-    Devuelve las metas de venta BP (Business Plan) de una propuesta, agrupadas por
-    `fechaDeInaguracionBP` (NO por la fecha operativa).
+    Devuelve las metas de venta BP (Business Plan) de una propuesta.
 
-    A diferencia de /programas-conciliacion, aquí solo se necesita el número agregado,
-    no el detalle de cada programa. Se entrega separado en dos sumas no solapadas:
-      - metaVentaBpMesConciliado: programas con fecha BP en el mes conciliado.
-      - metaVentaBpTresMeses:     programas con fecha BP en los 3 meses anteriores.
+    Los valores son fijos y dictados manualmente por (año, mes) en
+    META_VENTA_BP_POR_MES. NO se calculan desde programas ni desde el Excel.
+    Solo se usa la fecha de la propuesta para determinar qué meses aplican.
 
-    Reglas:
-      - Solo filtrado por rol del usuario (mismo criterio que /programas-conciliacion).
-      - Programas sin `fechaDeInaguracionBP` se excluyen (no suman a ninguna meta BP).
+    Se entrega separado en dos sumas no solapadas:
+      - metaVentaBpMesConciliado: meta BP del mes conciliado.
+      - metaVentaBpTresMeses:     suma de la meta BP de los 3 meses anteriores.
     """
     propuesta = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     if not propuesta:
@@ -344,45 +363,10 @@ def obtener_meta_bp(
             anio -= 1
         meses_anteriores.append((mes, anio))
 
-    # Filtrar programas según rol del usuario (mismo criterio que /programas-conciliacion)
-    if user_id:
-        usuario = db.query(Usuario).filter(Usuario.id == user_id).first()
-        roles_usuario = {rol.nombre for rol in usuario.roles} if usuario and usuario.roles else set()
-
-        roles_daf = {"DAF - Supervisor", "DAF - Subdirector", "DAF - Admin"}
-        roles_ver_todo = roles_daf | {"Comercial - Director"}
-        if roles_usuario & roles_ver_todo:
-            programas_all = db.query(ProgramaModel).filter(
-                ProgramaModel.idPropuesta == propuesta_id
-            ).all()
-        elif "Comercial - Subdirector" in roles_usuario or "Comercial - Jefe de producto" in roles_usuario:
-            condiciones = []
-            if "Comercial - Jefe de producto" in roles_usuario:
-                condiciones.append(ProgramaModel.idJefeProducto == user_id)
-            if "Comercial - Subdirector" in roles_usuario:
-                condiciones.append(ProgramaModel.idSubdirector == user_id)
-            programas_all = db.query(ProgramaModel).filter(
-                ProgramaModel.idPropuesta == propuesta_id,
-                or_(*condiciones)
-            ).all()
-        else:
-            programas_all = []
-    else:
-        programas_all = db.query(ProgramaModel).filter(
-            ProgramaModel.idPropuesta == propuesta_id
-        ).all()
-
-    meta_bp_mes_conciliado = 0.0
-    meta_bp_tres_meses = 0.0
-    for p in programas_all:
-        fecha_bp = p.fechaDeInaguracionBP
-        if not fecha_bp:
-            continue  # Sin fecha BP -> excluido
-        meta = p.metaDeVentaBP or 0.0
-        if fecha_bp.month == mes_conciliado and fecha_bp.year == anio_conciliado:
-            meta_bp_mes_conciliado += meta
-        elif any(fecha_bp.month == m and fecha_bp.year == a for m, a in meses_anteriores):
-            meta_bp_tres_meses += meta
+    meta_bp_mes_conciliado = META_VENTA_BP_POR_MES.get((anio_conciliado, mes_conciliado), 0.0)
+    meta_bp_tres_meses = sum(
+        META_VENTA_BP_POR_MES.get((anio, mes), 0.0) for mes, anio in meses_anteriores
+    )
 
     return {
         "metaVentaBpMesConciliado": meta_bp_mes_conciliado,
