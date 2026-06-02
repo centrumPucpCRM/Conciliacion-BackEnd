@@ -277,7 +277,8 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         usuario_nombreSubdirector = sanitize_value(row.get('usuario.nombreSubdirector', ''))
         
         fecha_inauguracion = sanitize_value(row.get('programa.fecha_de_inauguracion'))
-        
+        fecha_inauguracion_bp = sanitize_value(row.get('programa.fecha_de_inauguracion_bp'))
+
         # Calcular mes de forma segura
         if fecha_inauguracion and pd.notna(fecha_inauguracion):
             try:
@@ -305,6 +306,7 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             codigo=programa_codigo,
             nombre=programa_nombre,
             fechaDeInaguracion=fecha_inauguracion,
+            fechaDeInaguracionBP=fecha_inauguracion_bp,
             moneda=moneda,
             precioDeLista=precio_lista,
             metaDeVenta=meta_venta,
@@ -754,6 +756,7 @@ def cargar_csv(data):
     DATE_COLS = [
         'programa.fecha_de_inicio',
         'programa.fecha_de_inauguracion',
+        'programa.fecha_de_inauguracion_bp',
         'programa.fecha_ultima_postulante',
         'oportunidad.fecha_matricula',
     ]

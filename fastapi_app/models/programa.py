@@ -11,6 +11,7 @@ class Programa(Base):
     codigo = Column(String(255))
     nombre = Column(String(255))
     fechaDeInaguracion = Column(Date)
+    fechaDeInaguracionBP = Column(Date)
     moneda = Column(String(255))
     precioDeLista = Column(Float)
     metaDeVenta = Column(Float)
