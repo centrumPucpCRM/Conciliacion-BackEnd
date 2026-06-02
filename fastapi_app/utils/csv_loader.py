@@ -289,13 +289,15 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
         
         precio_lista = sanitize_value(row.get('programa.precio_lista', 0))
         meta_venta = sanitize_value(row.get('programa.meta_venta', 0))
+        meta_venta_bp = sanitize_value(row.get('programa.meta_venta_bp', 0))
         punto_minimo = sanitize_value(row.get('programa.punto_minimo_apertura', 0))
         meta_alumnos = sanitize_value(row.get('programa.meta_alumnos', 0))
         cartera_nombre = sanitize_value(row.get('cartera.nombre'))
-        
+
         # Convertir a tipos correctos después de sanitizar
         precio_lista = float(precio_lista) if precio_lista is not None else 0.0
         meta_venta = float(meta_venta) if meta_venta is not None else 0.0
+        meta_venta_bp = float(meta_venta_bp) if meta_venta_bp is not None else 0.0
         punto_minimo = int(punto_minimo) if punto_minimo is not None else 0
         meta_alumnos = int(meta_alumnos) if meta_alumnos is not None else 0
         
@@ -306,6 +308,7 @@ def cargar_programas(db, df, propuesta_unica, usuarios_dict):
             moneda=moneda,
             precioDeLista=precio_lista,
             metaDeVenta=meta_venta,
+            metaDeVentaBP=meta_venta_bp,
             puntoMinimoApertura=punto_minimo,
             subdireccion=subdireccion,
             idPropuesta=propuesta_unica.id,
