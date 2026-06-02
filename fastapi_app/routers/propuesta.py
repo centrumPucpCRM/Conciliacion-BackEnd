@@ -489,7 +489,7 @@ def control_de_cambios(
         for dni, o in cur_by_dni.items():
             if o.conciliado:
                 universo.add(dni)
-            elif (o.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA:
+            elif not o.becado and (o.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA:
                 universo.add(dni)
         for dni, o in base_by_dni.items():
             if o.conciliado:
@@ -513,8 +513,9 @@ def control_de_cambios(
                 if round(base.monto or 0, 2) != round(cur.monto or 0, 2):
                     cambios.append("monto")
 
-            # Nueva venta: en la actual NO conciliada y en Matrícula/Cerrada-Ganada
-            if cur and not cur.conciliado and (cur.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA:
+            # Nueva venta: en la actual NO conciliada, NO becada y en Matrícula/Cerrada-Ganada
+            if (cur and not cur.conciliado and not cur.becado
+                    and (cur.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA):
                 cambios.append("nueva_venta")
 
             if not cambios:
