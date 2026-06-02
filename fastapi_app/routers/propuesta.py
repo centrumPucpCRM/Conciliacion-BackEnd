@@ -482,10 +482,14 @@ def control_de_cambios(
         cur_by_dni = {norm_dni(o): o for o in cur_list if norm_dni(o)}
         base_by_dni = {norm_dni(o): o for o in base_list if norm_dni(o)}
 
-        # Universo: conciliado=True en cualquiera de las dos
+        # Universo:
+        #  - conciliado=True en cualquiera de las dos (para baja de etapa / cambio de monto)
+        #  - en la actual: NO conciliado pero en Matrícula/Cerrada-Ganada (nueva venta)
         universo = set()
         for dni, o in cur_by_dni.items():
             if o.conciliado:
+                universo.add(dni)
+            elif (o.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA:
                 universo.add(dni)
         for dni, o in base_by_dni.items():
             if o.conciliado:
@@ -497,7 +501,9 @@ def control_de_cambios(
             base = base_by_dni.get(dni)
             cambios = []
 
-            if base and cur:
+            # Cambios sobre conciliadas (baja de etapa / cambio de monto)
+            es_conciliada = bool((cur and cur.conciliado) or (base and base.conciliado))
+            if es_conciliada and base and cur:
                 base_etapa = (base.etapaVentaPropuesta or "").strip()
                 cur_etapa = (cur.etapaVentaPropuesta or "").strip()
                 # Solo interesa la baja: Matrícula/Cerrada-Ganada -> Cerrada/Perdida
@@ -506,6 +512,10 @@ def control_de_cambios(
                 # Y cambios de monto entre conciliadas
                 if round(base.monto or 0, 2) != round(cur.monto or 0, 2):
                     cambios.append("monto")
+
+            # Nueva venta: en la actual NO conciliada y en Matrícula/Cerrada-Ganada
+            if cur and not cur.conciliado and (cur.etapaVentaPropuesta or "").strip() in _ETAPAS_ORIGEN_BAJA:
+                cambios.append("nueva_venta")
 
             if not cambios:
                 continue
