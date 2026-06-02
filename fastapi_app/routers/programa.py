@@ -79,7 +79,13 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
     if not programa.codigo:
         raise HTTPException(status_code=400, detail="El programa no tiene código CRM")
 
-    # 1. Actualizar FFC (descontando los leads excluidos manualmente de la proyección)
+    # Sincronizar = recalcular todo desde cero. Se limpian las exclusiones manuales
+    # previas para que los leads que se habían quitado vuelvan a aparecer.
+    db.query(ProyeccionExcluido).filter(
+        ProyeccionExcluido.idPrograma == programa_id
+    ).delete(synchronize_session=False)
+
+    # 1. Actualizar FFC (ya sin exclusiones, recalculado completo)
     _, ffc_count, ffc_monto = _ffc_filtrado(db, programa)
     programa.fijoFueraDeCounter = ffc_count
     programa.montoFijoFueraDeCounter = ffc_monto
