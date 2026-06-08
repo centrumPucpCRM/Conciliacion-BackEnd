@@ -142,13 +142,18 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         )
 
         if existente:
-            # Ya conciliado o ya en proyecciones → sin cambios
-            if existente.conciliado or existente.agregadoUltimoMomento:
+            # Ya conciliado → no tocar nada
+            if existente.conciliado:
                 continue
-            # En BD pero sin conciliar ni proyectar → promover a último momento
-            # (ocurre cuando el alumno llegó vía Excel antes de ser conciliado en CRM)
-            existente.agregadoUltimoMomento = True
-            nuevos_agregados += 1
+            # No conciliado: actualizar stage desde CRM (manda CRM para proyecciones)
+            # y promover a proyecciones si todavía no lo estaba
+            etapa_crm = lead.get("etapa")
+            if etapa_crm:
+                existente.etapaDeVentas = etapa_crm
+                existente.etapaVentaPropuesta = etapa_crm
+            if not existente.agregadoUltimoMomento:
+                existente.agregadoUltimoMomento = True
+                nuevos_agregados += 1
             continue
 
         descuento = lead.get("descuento")
