@@ -471,7 +471,7 @@ def _transformar_oportunidad_crm(data_crm: Dict[str, Any], id_programa: int, id_
         "becado": becado,
         "partyNumber": data_crm.get("PartyNumber"),
         "optyNumber": str(data_crm.get("OptyNumber", "")) or None,
-        "conciliado": data_crm.get("CTRVentaConciliada_c", False),
+        "conciliado": data_crm.get("CTRVentaConciliada_c") == "Y",
         "posibleAtipico": posible_atipico,
         "moneda": data_crm.get("CTRMoneda_c", ""),
         "fechaMatricula": fecha_matricula,
