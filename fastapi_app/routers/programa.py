@@ -111,20 +111,18 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
             opp.becado = True
 
     # 3. Persistir alumnos de último momento (Matrícula / Cerrada-Ganada) nuevos en CRM
-    party_numbers_existentes = {
-        str(o.partyNumber).strip()
-        for o in oportunidades_db
-        if o.partyNumber
+    # Mapas clave→registro para poder promover registros existentes no conciliados
+    existentes_por_party = {
+        str(o.partyNumber).strip(): o
+        for o in oportunidades_db if o.partyNumber
     }
-    opty_numbers_existentes = {
-        str(o.optyNumber).strip()
-        for o in oportunidades_db
-        if o.optyNumber
+    existentes_por_opty = {
+        str(o.optyNumber).strip(): o
+        for o in oportunidades_db if o.optyNumber
     }
-    dni_existentes = {
-        str(o.documentoIdentidad).strip()
-        for o in oportunidades_db
-        if o.documentoIdentidad
+    existentes_por_dni = {
+        str(o.documentoIdentidad).strip(): o
+        for o in oportunidades_db if o.documentoIdentidad
     }
     leads_ultimo_momento = obtener_alumnos_ultimo_momento(programa.codigo)
     nuevos_agregados = 0
@@ -133,14 +131,26 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         opty_crm = str(lead.get("leadNumber") or "").strip()
         dni_crm = str(lead.get("dni") or "").strip()
 
-        if party_crm and party_crm in party_numbers_existentes:
-            continue
-        if opty_crm and opty_crm in opty_numbers_existentes:
-            continue
-        if dni_crm and dni_crm in dni_existentes:
-            continue
         if not party_crm and not opty_crm and not dni_crm:
             continue
+
+        # Buscar si ya existe un registro en BD por cualquiera de las tres claves
+        existente = (
+            (party_crm and existentes_por_party.get(party_crm))
+            or (opty_crm and existentes_por_opty.get(opty_crm))
+            or (dni_crm and existentes_por_dni.get(dni_crm))
+        )
+
+        if existente:
+            # Ya conciliado o ya en proyecciones → sin cambios
+            if existente.conciliado or existente.agregadoUltimoMomento:
+                continue
+            # En BD pero sin conciliar ni proyectar → promover a último momento
+            # (ocurre cuando el alumno llegó vía Excel antes de ser conciliado en CRM)
+            existente.agregadoUltimoMomento = True
+            nuevos_agregados += 1
+            continue
+
         descuento = lead.get("descuento")
         monto = float(lead.get("monto") or 0)
         becado = monto < 1
@@ -168,11 +178,11 @@ def sync_fijo_fuera_counter(programa_id: int, db: Session = Depends(get_db)):
         )
         db.add(nueva_opp)
         if party_crm:
-            party_numbers_existentes.add(party_crm)
+            existentes_por_party[party_crm] = nueva_opp
         if opty_crm:
-            opty_numbers_existentes.add(opty_crm)
+            existentes_por_opty[opty_crm] = nueva_opp
         if dni_crm:
-            dni_existentes.add(dni_crm)
+            existentes_por_dni[dni_crm] = nueva_opp
         nuevos_agregados += 1
 
     db.commit()
