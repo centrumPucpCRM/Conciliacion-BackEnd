@@ -414,6 +414,7 @@ _ETAPAS_ORIGEN_BAJA = {"3 - Matrícula", "4 - Cerrada/Ganada"}
 def control_de_cambios(
     propuesta_id: int,
     baseline_id: int = Query(..., description="ID de la conciliación seleccionada (baseline a comparar)"),
+    carteras: Optional[str] = Query(None, description="Carteras involucradas del usuario, separadas por '|' (los nombres pueden contener comas). Si se envía, solo se comparan programas de esas carteras."),
     db: Session = Depends(get_db),
 ):
     """
@@ -424,6 +425,8 @@ def control_de_cambios(
     - Match de alumnos por documentoIdentidad DENTRO del mismo programa (son únicos ahí).
     - Universo: alumnos con conciliado=True en cualquiera de las dos conciliaciones.
     - Cambios detectados por alumno: etapa, monto, dejó de estar conciliado, desapareció/eliminado, nuevo.
+    - Si llega `carteras`, se limita a los programas cuya cartera esté en esa lista (un JP
+      solo debe ver las carteras que le pertenecen).
     """
     actual = db.query(Propuesta).filter(Propuesta.id == propuesta_id).first()
     if not actual:
@@ -444,11 +447,16 @@ def control_de_cambios(
             anio -= 1
         meses_anteriores.append((mes, anio))
 
+    carteras_permitidas = None
+    if carteras:
+        carteras_permitidas = {c.strip() for c in carteras.split("|") if c.strip()}
+
     programas_actual = [
         p for p in db.query(ProgramaModel).filter(ProgramaModel.idPropuesta == propuesta_id).all()
         if p.fechaInaguracionPropuesta
         and any(p.fechaInaguracionPropuesta.month == m and p.fechaInaguracionPropuesta.year == a
                 for m, a in meses_anteriores)
+        and (carteras_permitidas is None or (p.cartera or "").strip() in carteras_permitidas)
     ]
 
     # Programas del baseline indexados por codigo
