@@ -1001,6 +1001,7 @@ def conciliar_propuesta(
     ids_programas_scope = {
         p.id for p in programas_scope
         if p.fechaInaguracionPropuesta
+        and not p.noAperturar
         and any(
             p.fechaInaguracionPropuesta.month == m and p.fechaInaguracionPropuesta.year == a
             for m, a in meses_scope
