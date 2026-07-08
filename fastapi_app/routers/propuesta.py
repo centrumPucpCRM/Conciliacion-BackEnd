@@ -87,6 +87,8 @@ def obtener_programas_conciliacion(
 
     # Excluir programas cancelados de los listados (siguen contando para Meta BP en /meta-bp)
     programas_all = [p for p in programas_all if (p.estado or "").strip().lower() != "cancelado"]
+    # Excluir programas no aperturados (mismo criterio que la vista de preconciliación)
+    programas_all = [p for p in programas_all if not p.noAperturar]
 
     # Separar programas por mes
     programas_mes_conciliado = [
